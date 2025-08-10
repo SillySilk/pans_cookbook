@@ -173,3 +173,20 @@ personal_recipes.json
 *.temp
 *.bak
 *.orig
+
+# Large files and archives
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.tar.bz2
+
+# Database files
+*.db
+herbalism.db
+*.sqlite
+*.sqlite3
+
+# Log files
+logs/
+*.log
