@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__spec-workflow__spec-workflow-guide",
+      "mcp__spec-workflow__get-template-context",
+      "mcp__spec-workflow__create-spec-doc",
+      "mcp__spec-workflow__request-approval",
+      "mcp__spec-workflow__get-approval-status",
+      "mcp__spec-workflow__delete-approval",
+      "mcp__spec-workflow__manage-tasks",
+      "mcp__filesystem__create_directory",
+      "Bash(python test:*)",
+      "Bash(dir)",
+      "Bash(python -m streamlit run:*)",
+      "mcp__filesystem__write_file",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}
