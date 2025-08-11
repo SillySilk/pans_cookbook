@@ -37,7 +37,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: Herbalism app/scraper.py, rate limiting patterns_
   - _Requirements: 2.1, 2.6_
 
-- [-] 5. Create recipe parsing and validation logic
+- [x] 5. Create recipe parsing and validation logic
   - File: services/parsing_service.py
   - Implement structured HTML parsing for recipe components (name, ingredients, instructions, times)
   - Create ingredient extraction and categorization logic
@@ -53,7 +53,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: Herbalism app/app.py UI patterns and styling_
   - _Requirements: 2.3, 2.4, 5.3, 5.4_
 
-- [ ] 7. Implement ingredient management system
+- [x] 7. Implement ingredient management system
   - File: services/ingredient_service.py
   - Create ingredient CRUD operations with duplicate detection
   - Implement ingredient merging with automatic recipe reference updates
@@ -61,7 +61,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: Herbalism app ingredient loading patterns_
   - _Requirements: 5.1, 5.2, 5.3, 5.5_
 
-- [ ] 8. Create core recipe browsing UI
+- [x] 8. Create core recipe browsing UI
   - File: ui/recipe_browser.py
   - Implement recipe filtering interface with multi-select ingredients
   - Create recipe display with "Can Make" vs "Missing Ingredients" styling
@@ -69,7 +69,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: Herbalism app/app.py layout, CSS styling, filtering UI_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 6.1_
 
-- [ ] 9. Build recipe details and editing interface
+- [x] 9. Build recipe details and editing interface
   - File: ui/recipe_details.py
   - Create detailed recipe view with instructions, nutrition, dietary tags
   - Implement recipe editing forms for all fields
@@ -77,7 +77,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: Herbalism app styling patterns and form layouts_
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 6.3, 6.4_
 
-- [ ] 10. Implement user authentication UI
+- [x] 10. Implement user authentication UI
   - File: ui/auth.py
   - Create user registration and login forms with email verification
   - Implement session state management for user accounts
@@ -85,7 +85,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: Streamlit session state patterns from Herbalism app_
   - _Requirements: 8.1, 8.2, 8.3, 3.1_
 
-- [ ] 11. Create recipe collections system
+- [x] 11. Create recipe collections system
   - File: services/collection_service.py
   - Implement collection CRUD operations with recipe associations
   - Create shopping list generation from collection recipes
@@ -93,7 +93,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: Database relationship patterns from Herbalism app_
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 12. Build collections management UI
+- [x] 12. Build collections management UI
   - File: ui/collections.py
   - Create collection creation and management interface
   - Implement favorites system with persistent storage per user
@@ -101,7 +101,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: Herbalism app UI patterns and session state management_
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 13. Implement optional AI integration service
+- [x] 13. Implement optional AI integration service
   - File: services/ai_service.py
   - Create API key validation for multiple AI services (OpenAI, Anthropic, etc.)
   - Implement recipe variation generation using user's AI API keys
@@ -109,7 +109,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: None (new functionality)_
   - _Requirements: 3.2, 3.3, 3.4_
 
-- [ ] 14. Create AI features UI components
+- [x] 14. Create AI features UI components
   - File: ui/ai_features.py
   - Build optional AI features interface that gracefully handles API unavailability
   - Create recipe variation display and suggestion interface
@@ -117,7 +117,7 @@ The implementation follows a modular approach that builds core functionality fir
   - _Leverage: Herbalism app conditional UI patterns_
   - _Requirements: 3.2, 3.4, 3.5_
 
-- [ ] 15. Add advanced filtering and search features
+- [-] 15. Add advanced filtering and search features
   - File: services/search_service.py
   - Implement cooking time range filtering (15-30 minutes)
   - Create cuisine type and meal category filtering

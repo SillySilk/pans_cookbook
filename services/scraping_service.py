@@ -547,6 +547,269 @@ class ScrapingService:
         except Exception:
             return False
     
+    def parse_recipe_text(self, text: str) -> Optional[ScrapedRecipe]:
+        """
+        Parse recipe text directly without web scraping.
+        
+        Args:
+            text: Raw recipe text (from paste, file, etc.)
+            
+        Returns:
+            ScrapedRecipe object or None if parsing fails
+        """
+        try:
+            logger.info("Parsing recipe from text input")
+            
+            # Initialize scraped recipe with basic data
+            scraped_recipe = ScrapedRecipe(
+                url="text-input",
+                title="Untitled Recipe",
+                scraping_method="text_parsing",
+                scraped_at=datetime.now(),
+                confidence_score=0.5
+            )
+            
+            # Parse the text using regex and text analysis
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            
+            # Extract title (usually first line or line before "Ingredients:")
+            title_line = None
+            for i, line in enumerate(lines):
+                # Look for a likely title - first substantial line or one before ingredients
+                if (i == 0 and len(line) > 3 and not any(word in line.lower() for word in ['ingredient', 'instruction', 'step', 'prep', 'cook'])) or \
+                   (i > 0 and i < len(lines) - 1 and 'ingredient' in lines[i + 1].lower() and len(line) > 3):
+                    title_line = line
+                    break
+            
+            if title_line:
+                scraped_recipe.title = title_line.strip()
+                scraped_recipe.confidence_score += 0.1
+            
+            # Extract ingredients section
+            ingredients_start = -1
+            ingredients_end = -1
+            
+            for i, line in enumerate(lines):
+                if re.search(r'ingredients?:?', line, re.IGNORECASE) and len(line) < 30:
+                    ingredients_start = i + 1
+                elif ingredients_start >= 0 and re.search(r'(instructions?:?|directions?:?|method:?|steps?:?)', line, re.IGNORECASE):
+                    ingredients_end = i
+                    break
+            
+            if ingredients_start >= 0:
+                ingredients_end = ingredients_end if ingredients_end > 0 else len(lines)
+                ingredient_lines = lines[ingredients_start:ingredients_end]
+                
+                # Filter and clean ingredient lines
+                ingredients = []
+                for line in ingredient_lines:
+                    # Skip empty lines and lines that look like headers
+                    if line and not re.search(r'^(ingredients?:?|directions?:?|instructions?:?)$', line, re.IGNORECASE):
+                        # Remove bullet points and numbers
+                        clean_line = re.sub(r'^[-•*\d+\.)]\s*', '', line)
+                        if clean_line and len(clean_line) > 2:
+                            ingredients.append(clean_line)
+                
+                scraped_recipe.ingredients_raw = ingredients
+                if ingredients:
+                    scraped_recipe.confidence_score += 0.2
+            
+            # Extract instructions section
+            instructions_start = -1
+            for i, line in enumerate(lines):
+                if re.search(r'(instructions?:?|directions?:?|method:?|steps?:?)', line, re.IGNORECASE) and len(line) < 30:
+                    instructions_start = i + 1
+                    break
+            
+            if instructions_start >= 0:
+                instruction_lines = lines[instructions_start:]
+                
+                # Clean and join instructions
+                instructions = []
+                for line in instruction_lines:
+                    if line and not re.search(r'^(prep:?|cook:?|total:?|serves?:?|yield:?)', line, re.IGNORECASE):
+                        # Remove step numbers
+                        clean_line = re.sub(r'^\d+[\.)]\s*', '', line)
+                        if clean_line and len(clean_line) > 5:
+                            instructions.append(clean_line)
+                
+                scraped_recipe.instructions_raw = '\n'.join(instructions)
+                if instructions:
+                    scraped_recipe.confidence_score += 0.1
+            
+            # Extract timing information
+            full_text = text.lower()
+            
+            # Look for prep time
+            prep_match = re.search(r'prep(?:\s+time)?:?\s*(\d+)\s*(?:min|minutes|hrs?|hours?)', full_text)
+            if prep_match:
+                scraped_recipe.prep_time_text = prep_match.group(0)
+                scraped_recipe.confidence_score += 0.05
+            
+            # Look for cook time
+            cook_match = re.search(r'cook(?:\s+time)?:?\s*(\d+)\s*(?:min|minutes|hrs?|hours?)', full_text)
+            if cook_match:
+                scraped_recipe.cook_time_text = cook_match.group(0)
+                scraped_recipe.confidence_score += 0.05
+            
+            # Look for servings
+            serves_match = re.search(r'(?:serves?|yield):?\s*(\d+)', full_text)
+            if serves_match:
+                scraped_recipe.servings_text = serves_match.group(0)
+                scraped_recipe.confidence_score += 0.05
+            
+            # Look for description (lines after title but before ingredients)
+            if ingredients_start > 1:
+                potential_desc_lines = lines[1:ingredients_start]
+                desc_lines = [line for line in potential_desc_lines 
+                             if not re.search(r'(ingredients?:?|prep:?|cook:?|serves?:?)', line, re.IGNORECASE)]
+                if desc_lines:
+                    scraped_recipe.description = ' '.join(desc_lines)
+                    scraped_recipe.confidence_score += 0.05
+            
+            logger.info(f"Text parsing completed with confidence: {scraped_recipe.confidence_score:.2f}")
+            return scraped_recipe
+            
+        except Exception as e:
+            logger.error(f"Failed to parse recipe text: {e}")
+            return None
+    
+    def parse_html_content(self, html_content: str) -> Optional[ScrapedRecipe]:
+        """
+        Parse HTML content directly (from uploaded files).
+        
+        Args:
+            html_content: Raw HTML content
+            
+        Returns:
+            ScrapedRecipe object or None if parsing fails
+        """
+        try:
+            logger.info("Parsing recipe from HTML content")
+            
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Initialize scraped recipe
+            scraped_recipe = ScrapedRecipe(
+                url="html-upload",
+                title="Untitled Recipe",
+                scraping_method="html_parsing",
+                scraped_at=datetime.now(),
+                confidence_score=0.4  # Start with decent confidence for HTML
+            )
+            
+            # Try to extract recipe using JSON-LD structured data first
+            json_ld_scripts = soup.find_all('script', type='application/ld+json')
+            for script in json_ld_scripts:
+                try:
+                    import json
+                    data = json.loads(script.string)
+                    
+                    if isinstance(data, list):
+                        data = data[0]
+                    
+                    if data.get('@type') in ['Recipe', 'recipe']:
+                        scraped_recipe.title = data.get('name', scraped_recipe.title)
+                        scraped_recipe.description = data.get('description', '')
+                        
+                        # Extract ingredients
+                        if 'recipeIngredient' in data:
+                            scraped_recipe.ingredients_raw = data['recipeIngredient']
+                            scraped_recipe.confidence_score += 0.3
+                        
+                        # Extract instructions
+                        if 'recipeInstructions' in data:
+                            instructions = []
+                            for instruction in data['recipeInstructions']:
+                                if isinstance(instruction, dict):
+                                    instructions.append(instruction.get('text', ''))
+                                else:
+                                    instructions.append(str(instruction))
+                            scraped_recipe.instructions_raw = '\n'.join(instructions)
+                            scraped_recipe.confidence_score += 0.2
+                        
+                        # Extract timing
+                        if 'prepTime' in data:
+                            scraped_recipe.prep_time_text = data['prepTime']
+                            scraped_recipe.confidence_score += 0.05
+                        
+                        if 'cookTime' in data:
+                            scraped_recipe.cook_time_text = data['cookTime']
+                            scraped_recipe.confidence_score += 0.05
+                        
+                        # Extract servings
+                        if 'recipeYield' in data:
+                            scraped_recipe.servings_text = str(data['recipeYield'])
+                            scraped_recipe.confidence_score += 0.05
+                        
+                        logger.info(f"Successfully parsed JSON-LD recipe data with confidence: {scraped_recipe.confidence_score:.2f}")
+                        return scraped_recipe
+                        
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    continue
+            
+            # Fallback to HTML parsing with common selectors
+            # Title extraction
+            title_selectors = ['h1', '.recipe-title', '.entry-title', '[itemprop="name"]', 'title']
+            for selector in title_selectors:
+                title_elem = soup.select_one(selector)
+                if title_elem and title_elem.get_text().strip():
+                    scraped_recipe.title = title_elem.get_text().strip()
+                    scraped_recipe.confidence_score += 0.1
+                    break
+            
+            # Ingredients extraction
+            ingredient_selectors = [
+                '.recipe-ingredient', '.ingredients li', '[itemprop="recipeIngredient"]',
+                '.ingredient', 'ul.ingredients li', '.recipe-ingredients li'
+            ]
+            ingredients = []
+            for selector in ingredient_selectors:
+                elements = soup.select(selector)
+                if elements:
+                    ingredients = [elem.get_text().strip() for elem in elements if elem.get_text().strip()]
+                    if ingredients:
+                        scraped_recipe.ingredients_raw = ingredients
+                        scraped_recipe.confidence_score += 0.2
+                        break
+            
+            # Instructions extraction
+            instruction_selectors = [
+                '.recipe-instruction', '.instructions li', '[itemprop="recipeInstructions"]',
+                '.method li', '.directions li', '.recipe-directions li'
+            ]
+            for selector in instruction_selectors:
+                elements = soup.select(selector)
+                if elements:
+                    instructions = [elem.get_text().strip() for elem in elements if elem.get_text().strip()]
+                    if instructions:
+                        scraped_recipe.instructions_raw = '\n'.join(instructions)
+                        scraped_recipe.confidence_score += 0.1
+                        break
+            
+            # Description extraction
+            desc_selectors = ['.recipe-description', '.entry-content p', '[itemprop="description"]']
+            for selector in desc_selectors:
+                desc_elem = soup.select_one(selector)
+                if desc_elem and desc_elem.get_text().strip():
+                    scraped_recipe.description = desc_elem.get_text().strip()
+                    scraped_recipe.confidence_score += 0.05
+                    break
+            
+            # If we still don't have good data, try parsing as text
+            if scraped_recipe.confidence_score < 0.5:
+                text_content = soup.get_text()
+                text_result = self.parse_recipe_text(text_content)
+                if text_result and text_result.confidence_score > scraped_recipe.confidence_score:
+                    return text_result
+            
+            logger.info(f"HTML parsing completed with confidence: {scraped_recipe.confidence_score:.2f}")
+            return scraped_recipe
+            
+        except Exception as e:
+            logger.error(f"Failed to parse HTML content: {e}")
+            return None
+
     def _load_site_configs(self) -> Dict[str, Dict[str, Any]]:
         """Load site-specific parsing configurations"""
         # This could be loaded from a JSON file in production

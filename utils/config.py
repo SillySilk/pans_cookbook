@@ -35,6 +35,11 @@ class Config:
     ai_timeout_seconds: int = 30
     supported_ai_services: list = None
     
+    # LM Studio settings
+    lm_studio_url: str = "http://localhost:1234/v1"
+    lm_studio_enabled: bool = True
+    ai_max_retries: int = 2
+    
     # Streamlit settings
     streamlit_port: int = 8501
     streamlit_host: str = "localhost"
@@ -51,7 +56,7 @@ class Config:
     def __post_init__(self):
         """Initialize default values that need processing"""
         if self.supported_ai_services is None:
-            self.supported_ai_services = ["openai", "anthropic", "ollama"]
+            self.supported_ai_services = ["lm_studio", "openai", "anthropic"]
     
     @classmethod
     def from_environment(cls) -> 'Config':
@@ -76,6 +81,11 @@ class Config:
             # AI
             ai_enabled=os.getenv("PANS_AI_ENABLED", "true").lower() == "true",
             ai_timeout_seconds=int(os.getenv("PANS_AI_TIMEOUT", "30")),
+            
+            # LM Studio
+            lm_studio_url=os.getenv("PANS_LM_STUDIO_URL", "http://localhost:1234/v1"),
+            lm_studio_enabled=os.getenv("PANS_LM_STUDIO_ENABLED", "true").lower() == "true",
+            ai_max_retries=int(os.getenv("PANS_AI_MAX_RETRIES", "2")),
             
             # Streamlit
             streamlit_port=int(os.getenv("PANS_PORT", "8501")),
