@@ -14,9 +14,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from models import ScrapedRecipe, ParsedRecipe
-from services import DatabaseService, ParsingService, AIService
+from services import DatabaseService, ParsingService, AIService, get_pantry_service
 from ui import ValidationInterface, AIFeaturesInterface, show_ai_status
 from ui.responsive_design import ResponsiveDesign, MobileOptimizations, create_responsive_layout
+from ui.pantry_manager import PantryManagerInterface
 from datetime import datetime
 
 def main():
@@ -39,7 +40,7 @@ def main():
         {"label": "Status", "icon": "📊"},
         {"label": "Validation Demo", "icon": "🔍"},
         {"label": "AI Features", "icon": "🤖"},
-        {"label": "Recipe Manager", "icon": "📝"}
+        {"label": "My Pantry", "icon": "🥬"}
     ]
     tab1, tab2, tab3, tab4 = responsive.create_responsive_tabs(tab_config)
     
@@ -60,6 +61,7 @@ def main():
         - ✅ AI features UI with ingredient suggestions & instruction improvements
         - ✅ Advanced filtering and search features
         - ✅ Responsive web design
+        - ✅ Pantry management with "what can I make" functionality
         
         **Coming Next:**
         - 👥 User management and collections
@@ -68,8 +70,8 @@ def main():
         
         # System metrics in responsive layout
         metrics = [
-            {"label": "Services", "value": "8", "delta": "Active"},
-            {"label": "UI Components", "value": "6", "delta": "Mobile-Ready"},
+            {"label": "Services", "value": "9", "delta": "Active"},
+            {"label": "UI Components", "value": "7", "delta": "Mobile-Ready"},
             {"label": "Test Coverage", "value": "85%", "delta": "Good"}
         ]
         responsive.render_responsive_metrics(metrics)
@@ -109,6 +111,13 @@ def main():
             except Exception as e:
                 st.error(f"❌ AI Features UI: {e}")
             
+            try:
+                pantry_service = get_pantry_service()
+                pantry_ui = PantryManagerInterface(pantry_service)
+                st.success("✅ Pantry Management: Working")
+            except Exception as e:
+                st.error(f"❌ Pantry Management: {e}")
+            
             # AI Status
             try:
                 show_ai_status(compact=False)
@@ -122,7 +131,7 @@ def main():
         demo_ai_features()
     
     with tab4:
-        st.info("Recipe manager coming in future tasks...")
+        demo_pantry_manager()
         
 
 def demo_validation_interface():
@@ -384,6 +393,201 @@ def demo_ai_features():
     with col2:
         st.markdown("### 🔍 AI Scraping Helper")
         ai_ui.render_ai_scraping_helper()
+
+
+def demo_pantry_manager():
+    """Demo the pantry management interface"""
+    st.markdown("### 🥬 My Pantry - What Can I Make?")
+    st.markdown("Manage your ingredient inventory and discover recipes you can make right now!")
+    
+    # Initialize pantry services  
+    db = DatabaseService(":memory:")
+    pantry_service = get_pantry_service(db)
+    pantry_ui = PantryManagerInterface(pantry_service)
+    
+    # Demo user ID
+    demo_user_id = 1
+    
+    # Add some sample ingredients to the database for demo
+    try:
+        # Ensure we have some basic ingredients
+        from services import get_ingredient_service
+        ingredient_service = get_ingredient_service(db)
+        
+        # Add common pantry ingredients
+        sample_ingredients = [
+            ("Salt", "seasoning"),
+            ("Black Pepper", "seasoning"),
+            ("Olive Oil", "oil"), 
+            ("Butter", "dairy"),
+            ("Garlic", "vegetable"),
+            ("Onion", "vegetable"),
+            ("All-Purpose Flour", "grain"),
+            ("Sugar", "sweetener"),
+            ("Eggs", "protein"),
+            ("Chicken Breast", "protein"),
+            ("Milk", "dairy"),
+            ("Tomato", "vegetable"),
+            ("Basil", "herb"),
+            ("Mozzarella Cheese", "dairy"),
+            ("Ground Beef", "protein")
+        ]
+        
+        for name, category in sample_ingredients:
+            try:
+                ingredient_service.create_ingredient(name, category)
+            except:
+                pass  # Ingredient might already exist
+        
+        # Create a few sample recipes with ingredients
+        from models import Recipe
+        sample_recipes = [
+            {
+                'name': 'Simple Scrambled Eggs',
+                'description': 'Quick and easy scrambled eggs',
+                'instructions': '1. Heat butter in pan 2. Whisk eggs with salt and pepper 3. Cook eggs stirring frequently 4. Serve hot',
+                'prep_time_minutes': 5,
+                'cook_time_minutes': 5,
+                'servings': 2,
+                'difficulty_level': 'easy',
+                'ingredients': ['Eggs', 'Butter', 'Salt', 'Black Pepper']
+            },
+            {
+                'name': 'Garlic Butter Chicken',
+                'description': 'Tender chicken with garlic butter sauce',
+                'instructions': '1. Season chicken with salt and pepper 2. Heat oil in pan 3. Cook chicken until golden 4. Add garlic and butter 5. Cook until done',
+                'prep_time_minutes': 10,
+                'cook_time_minutes': 15,
+                'servings': 4,
+                'difficulty_level': 'medium',
+                'ingredients': ['Chicken Breast', 'Garlic', 'Butter', 'Olive Oil', 'Salt', 'Black Pepper']
+            },
+            {
+                'name': 'Caprese Salad',
+                'description': 'Fresh tomato and mozzarella salad',
+                'instructions': '1. Slice tomatoes and mozzarella 2. Arrange on plate 3. Add basil leaves 4. Drizzle with olive oil 5. Season with salt and pepper',
+                'prep_time_minutes': 10,
+                'cook_time_minutes': 0,
+                'servings': 2,
+                'difficulty_level': 'easy',
+                'ingredients': ['Tomato', 'Mozzarella Cheese', 'Basil', 'Olive Oil', 'Salt', 'Black Pepper']
+            }
+        ]
+        
+        # Add recipes to database
+        for recipe_data in sample_recipes:
+            try:
+                # Create recipe
+                recipe = db.create_recipe(
+                    name=recipe_data['name'],
+                    description=recipe_data['description'],
+                    instructions=recipe_data['instructions'],
+                    prep_time_minutes=recipe_data['prep_time_minutes'],
+                    cook_time_minutes=recipe_data['cook_time_minutes'],
+                    servings=recipe_data['servings'],
+                    difficulty_level=recipe_data['difficulty_level'],
+                    created_by=demo_user_id
+                )
+                
+                if recipe:
+                    # Add ingredients to recipe
+                    for ingredient_name in recipe_data['ingredients']:
+                        ingredients = db.search_ingredients(ingredient_name)
+                        if ingredients:
+                            ingredient = ingredients[0]
+                            db.add_recipe_ingredient(
+                                recipe.id,
+                                ingredient.id,
+                                quantity=1.0,
+                                unit="unit"
+                            )
+            except Exception as e:
+                pass  # Recipe might already exist
+        
+    except Exception as e:
+        st.warning(f"Demo setup issue: {e}")
+    
+    # Check if user has a pantry setup
+    user_pantry = pantry_service.get_user_pantry(demo_user_id)
+    
+    if not user_pantry:
+        st.info("👋 Welcome to your pantry! Let's set it up with some common ingredients.")
+        
+        if st.button("🚀 Set Up My Pantry", type="primary"):
+            with st.spinner("Setting up your pantry with common ingredients..."):
+                added_count = pantry_service.add_common_ingredients_to_pantry(demo_user_id)
+                st.success(f"✅ Added {added_count} common ingredients to your pantry!")
+                st.experimental_rerun()
+    else:
+        # Show main pantry interface
+        pantry_ui.render_pantry_interface(demo_user_id)
+        
+        # Show what recipes can be made
+        st.markdown("---")
+        st.markdown("### 🍽️ Recipes You Can Make Now")
+        
+        makeable_recipes = pantry_service.find_makeable_recipes(demo_user_id, strict_mode=True)
+        partial_recipes = pantry_service.find_makeable_recipes(demo_user_id, strict_mode=False, include_partial_matches=True)
+        
+        if makeable_recipes:
+            st.success(f"🎉 You can make {len(makeable_recipes)} recipes right now!")
+            
+            for recipe_match in makeable_recipes[:3]:  # Show top 3
+                with st.expander(f"✅ {recipe_match.recipe.name} ({recipe_match.match_status})", expanded=False):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**Description:** {recipe_match.recipe.description}")
+                        st.write(f"**Time:** {recipe_match.recipe.prep_time_minutes + recipe_match.recipe.cook_time_minutes} min")
+                        st.write(f"**Servings:** {recipe_match.recipe.servings}")
+                        st.write(f"**Difficulty:** {recipe_match.recipe.difficulty_level}")
+                    
+                    with col2:
+                        st.write("**Your Available Ingredients:**")
+                        for ingredient in recipe_match.available_ingredients:
+                            st.write(f"✅ {ingredient}")
+                        
+                        if recipe_match.missing_ingredients:
+                            st.write("**Missing:**")
+                            for ingredient in recipe_match.missing_ingredients:
+                                st.write(f"❌ {ingredient}")
+        else:
+            st.info("😔 No complete recipes found with your current ingredients.")
+        
+        # Show partial matches
+        partial_only = [r for r in partial_recipes if not r.can_make][:3]
+        if partial_only:
+            st.markdown("### 🟡 Almost Ready (Need 1-2 ingredients)")
+            
+            for recipe_match in partial_only:
+                with st.expander(f"🟡 {recipe_match.recipe.name} - Missing {len(recipe_match.missing_ingredients)} ingredients", expanded=False):
+                    st.write(f"**Match:** {recipe_match.match_percentage:.0%} of ingredients")
+                    st.write(f"**Need to buy:** {', '.join(recipe_match.missing_ingredients)}")
+        
+        # Shopping suggestions
+        if makeable_recipes or partial_only:
+            st.markdown("---")
+            st.markdown("### 🛒 Shopping Suggestions")
+            
+            suggestions = pantry_service.suggest_recipes_to_complete_pantry(demo_user_id, max_missing=2)
+            
+            if suggestions:
+                suggestion = suggestions[0]  # Show top suggestion
+                st.info(f"💡 **Shopping Tip:** Buy {', '.join(suggestion.missing_ingredients)} to make **{suggestion.recipe.name}**!")
+        
+        # Pantry statistics
+        st.markdown("---")
+        with st.expander("📊 Pantry Statistics", expanded=False):
+            available_count = len([item for item in user_pantry if item.is_available])
+            total_count = len(user_pantry)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Available Ingredients", available_count)
+            with col2:
+                st.metric("Total in Pantry", total_count)
+            with col3:
+                st.metric("Makeable Recipes", len(makeable_recipes))
 
 
 def create_sample_parsed_recipe() -> ParsedRecipe:

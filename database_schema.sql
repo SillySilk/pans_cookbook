@@ -117,6 +117,19 @@ CREATE TABLE IF NOT EXISTS recipe_ratings (
     FOREIGN KEY (recipe_id) REFERENCES recipes (id) ON DELETE CASCADE
 );
 
+-- User pantry table for ingredient inventory management
+CREATE TABLE IF NOT EXISTS user_pantry (
+    user_id INTEGER NOT NULL,
+    ingredient_id INTEGER NOT NULL,
+    is_available INTEGER DEFAULT 1,
+    quantity_estimate TEXT DEFAULT NULL,  -- 'plenty', 'running low', 'just enough'
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT DEFAULT '',
+    PRIMARY KEY (user_id, ingredient_id),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (ingredient_id) REFERENCES ingredients (id) ON DELETE CASCADE
+);
+
 -- Scraping log table for tracking scraping operations
 CREATE TABLE IF NOT EXISTS scraping_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -151,6 +164,10 @@ CREATE INDEX IF NOT EXISTS idx_collections_public ON collections (is_public);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON user_sessions (session_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON user_sessions (expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_user_pantry_user ON user_pantry (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_pantry_ingredient ON user_pantry (ingredient_id);
+CREATE INDEX IF NOT EXISTS idx_user_pantry_available ON user_pantry (is_available);
 
 -- Sample data inserts (similar to Herbalism app CSV loading)
 

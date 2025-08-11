@@ -13,6 +13,7 @@ from .ingredient_service import IngredientService, get_ingredient_service
 from .collection_service import CollectionService, get_collection_service
 from .ai_service import AIService, get_ai_service, is_ai_available
 from .search_service import SearchService, get_search_service, SearchFilters, TimeRange, SortOrder
+from .pantry_service import PantryService, get_pantry_service, PantryItem, RecipeMatch
 
 __all__ = [
     'DatabaseService',
@@ -33,5 +34,9 @@ __all__ = [
     'get_search_service',
     'SearchFilters',
     'TimeRange',
-    'SortOrder'
+    'SortOrder',
+    'PantryService',
+    'get_pantry_service',
+    'PantryItem',
+    'RecipeMatch'
 ]
