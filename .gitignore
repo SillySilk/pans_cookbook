@@ -137,8 +137,8 @@ dmypy.json
 *.sqlite3
 data/exports/
 logs/
-temp/
 tmp/
+temp/
 
 # OS generated files
 .DS_Store
@@ -190,3 +190,13 @@ herbalism.db
 # Log files
 logs/
 *.log
+
+# Reference materials and examples (not part of main project)
+Herbalism app/
+**/Herbalism app/
+*.pdf
+uploads/
+gitignore.txt
+
+# Claude-specific files
+.claude/

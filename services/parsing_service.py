@@ -158,7 +158,7 @@ class ParsingService:
         # Remove common recipe site suffixes
         suffixes_to_remove = [
             r'\s*-\s*[^-]+\.com$',  # - sitename.com
-            r'\s*\|\s*[^|]+$',      # | Site Name
+            r'\s*|\s*[^|]+$',      # | Site Name
             r'\s*recipe\s*$',       # Recipe (case insensitive)
         ]
         
