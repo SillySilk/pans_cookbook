@@ -84,6 +84,23 @@ class AIService:
         
         return self._ai_available
     
+    def get_completion(self, prompt: str, max_tokens: int = 500, temperature: float = 0.3) -> Optional[str]:
+        """
+        Public method to get AI completion for any prompt.
+        
+        Args:
+            prompt: Text prompt to send to AI
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature (lower = more focused)
+            
+        Returns:
+            Response text or None if AI unavailable
+        """
+        if not self.is_ai_available():
+            return None
+        
+        return self._call_lm_studio(prompt, max_tokens, temperature)
+    
     def _check_lm_studio_health(self) -> bool:
         """Check if LM Studio is running and responsive"""
         try:
