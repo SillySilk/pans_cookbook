@@ -13,7 +13,10 @@
       "Bash(dir)",
       "Bash(python -m streamlit run:*)",
       "mcp__filesystem__write_file",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git rm:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

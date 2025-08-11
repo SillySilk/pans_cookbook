@@ -1,0 +1,22 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting beautifulsoup4
+  Downloading beautifulsoup4-4.13.4-py3-none-any.whl.metadata (3.8 kB)
+Requirement already satisfied: requests in c:\users\littl\appdata\roaming\python\python313\site-packages (2.32.4)
+Collecting lxml
+  Downloading lxml-6.0.0-cp313-cp313-win_amd64.whl.metadata (6.8 kB)
+Collecting soupsieve>1.2 (from beautifulsoup4)
+  Downloading soupsieve-2.7-py3-none-any.whl.metadata (4.6 kB)
+Collecting typing-extensions>=4.0.0 (from beautifulsoup4)
+  Downloading typing_extensions-4.14.1-py3-none-any.whl.metadata (3.0 kB)
+Requirement already satisfied: charset_normalizer<4,>=2 in c:\users\littl\appdata\roaming\python\python313\site-packages (from requests) (3.4.2)
+Requirement already satisfied: idna<4,>=2.5 in c:\users\littl\appdata\roaming\python\python313\site-packages (from requests) (3.10)
+Requirement already satisfied: urllib3<3,>=1.21.1 in c:\users\littl\appdata\roaming\python\python313\site-packages (from requests) (2.5.0)
+Requirement already satisfied: certifi>=2017.4.17 in c:\users\littl\appdata\roaming\python\python313\site-packages (from requests) (2025.6.15)
+Downloading beautifulsoup4-4.13.4-py3-none-any.whl (187 kB)
+Downloading lxml-6.0.0-cp313-cp313-win_amd64.whl (4.0 MB)
+   ---------------------------------------- 4.0/4.0 MB 4.0 MB/s eta 0:00:00
+Downloading soupsieve-2.7-py3-none-any.whl (36 kB)
+Downloading typing_extensions-4.14.1-py3-none-any.whl (43 kB)
+Installing collected packages: typing-extensions, soupsieve, lxml, beautifulsoup4
+
+Successfully installed beautifulsoup4-4.13.4 lxml-6.0.0 soupsieve-2.7 typing-extensions-4.14.1

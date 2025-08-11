@@ -9,6 +9,8 @@ from .database_service import DatabaseService, get_database_service
 from .auth_service import AuthService
 from .scraping_service import ScrapingService, get_scraping_service
 from .parsing_service import ParsingService, get_parsing_service
+from .ingredient_service import IngredientService, get_ingredient_service
+from .collection_service import CollectionService, get_collection_service
 
 __all__ = [
     'DatabaseService',
@@ -17,5 +19,9 @@ __all__ = [
     'ScrapingService',
     'get_scraping_service',
     'ParsingService',
-    'get_parsing_service'
+    'get_parsing_service',
+    'IngredientService',
+    'get_ingredient_service',
+    'CollectionService',
+    'get_collection_service'
 ]

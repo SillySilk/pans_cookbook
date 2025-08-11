@@ -408,51 +408,81 @@ class ParsingService:
         if any(indicator in original_text.lower() for indicator in ['optional', '(optional)', 'to taste']):
             result['optional'] = True
         
-        # Extract quantity and unit using regex
-        # Pattern: number + optional fraction + unit
-        quantity_pattern = r'^(\d+(?:\.\d+)?|\d+\s+\d+/\d+|\d+/\d+)?\s*([a-zA-Z]+)?\s*(.*)'
+        # Improved regex for quantity + unit parsing
+        # Handle mixed fractions, decimals, and ranges
+        quantity_pattern = r'^(\d+(?:\s+\d+/\d+|\.\d+|/\d+)?(?:\s*-\s*\d+(?:\s+\d+/\d+|\.\d+|/\d+)?)?)\s+([a-zA-Z-]+(?:\s+[a-zA-Z-]+)*?)\s+(.*)'
+        
+        # Try main pattern first
         match = re.match(quantity_pattern, original_text)
         
         if match:
             quantity_str, unit_str, remainder = match.groups()
             
             # Parse quantity
-            if quantity_str:
-                result['quantity'] = self._parse_quantity(quantity_str.strip())
+            result['quantity'] = self._parse_quantity(quantity_str.strip())
             
-            # Parse unit
-            if unit_str:
-                result['unit'] = self._normalize_unit(unit_str.strip())
-            
-            # Parse ingredient name and preparation
-            if remainder:
+            # Check if unit is actually a descriptor (size/type)
+            unit_clean = unit_str.strip().lower()
+            if self._is_descriptor_not_unit(unit_clean):
+                # This is a descriptor, not a unit - include it with the ingredient name
+                result['unit'] = ''
+                result['name'], result['preparation'] = self._parse_ingredient_name_and_prep(f"{unit_str} {remainder}".strip())
+            else:
+                result['unit'] = self._normalize_unit(unit_clean)
                 result['name'], result['preparation'] = self._parse_ingredient_name_and_prep(remainder.strip())
         else:
-            # Fallback: treat entire text as ingredient name
-            result['name'] = original_text
+            # Try simpler pattern for cases like "3 large eggs" or "salt to taste"
+            simple_pattern = r'^(\d+(?:\s+\d+/\d+|\.\d+|/\d+)?)\s+(.*)'
+            simple_match = re.match(simple_pattern, original_text)
+            
+            if simple_match:
+                quantity_str, remainder = simple_match.groups()
+                result['quantity'] = self._parse_quantity(quantity_str.strip())
+                result['name'], result['preparation'] = self._parse_ingredient_name_and_prep(remainder.strip())
+            else:
+                # No quantity found - treat as ingredient name only
+                result['name'], result['preparation'] = self._parse_ingredient_name_and_prep(original_text)
         
         return result
     
     def _parse_quantity(self, quantity_str: str) -> float:
         """Parse quantity string to float"""
         try:
+            # Handle ranges like "2-3" - take the first value
+            if '-' in quantity_str:
+                quantity_str = quantity_str.split('-')[0].strip()
+            
             # Handle fractions like "1 1/2" or "1/2"
             if '/' in quantity_str:
-                if ' ' in quantity_str:
-                    # Mixed number like "1 1/2"
-                    parts = quantity_str.split(' ')
-                    whole = float(parts[0])
-                    fraction_parts = parts[1].split('/')
-                    fraction = float(fraction_parts[0]) / float(fraction_parts[1])
-                    return whole + fraction
+                # Mixed number like "1 1/2" or "2 1/4"
+                if ' ' in quantity_str.strip():
+                    parts = quantity_str.strip().split()
+                    if len(parts) == 2:
+                        whole = float(parts[0])
+                        if '/' in parts[1]:
+                            fraction_parts = parts[1].split('/')
+                            fraction = float(fraction_parts[0]) / float(fraction_parts[1])
+                            return whole + fraction
                 else:
                     # Simple fraction like "1/2"
                     parts = quantity_str.split('/')
-                    return float(parts[0]) / float(parts[1])
+                    if len(parts) == 2:
+                        return float(parts[0]) / float(parts[1])
             else:
                 return float(quantity_str)
-        except (ValueError, ZeroDivisionError):
+        except (ValueError, ZeroDivisionError, IndexError):
             return 0.0
+    
+    def _is_descriptor_not_unit(self, text: str) -> bool:
+        """Check if text is a size/type descriptor rather than a measurement unit"""
+        descriptors = {
+            'large', 'medium', 'small', 'extra-large', 'jumbo',
+            'fresh', 'dried', 'frozen', 'canned', 'whole',
+            'lean', 'boneless', 'skinless', 'ground',
+            'ripe', 'green', 'red', 'yellow', 'white',
+            'thick', 'thin', 'fine', 'coarse'
+        }
+        return text in descriptors
     
     def _normalize_unit(self, unit_str: str) -> str:
         """Normalize measurement unit"""
@@ -490,10 +520,10 @@ class ParsingService:
         """Parse ingredient name and preparation instructions"""
         # Common preparation indicators
         prep_patterns = [
-            r',\s*(chopped|diced|sliced|minced|grated|shredded|crushed|ground)',
-            r',\s*(fresh|dried|frozen|canned)',
-            r',\s*(peeled|seeded|stemmed|trimmed)',
-            r'\((.*?)\)',  # Parenthetical prep instructions
+            r',\s*(chopped|diced|sliced|minced|grated|shredded|crushed|ground|softened)',
+            r',\s*(fresh|dried|frozen|canned|room\s+temperature)',
+            r',\s*(peeled|seeded|stemmed|trimmed|pitted)',
+            r'\((.*?)\)',  # Parenthetical instructions
         ]
         
         name = text
@@ -502,12 +532,20 @@ class ParsingService:
         for pattern in prep_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             if matches:
-                preparations.extend(matches)
+                # Handle nested matches from parentheses
+                for match in matches:
+                    if isinstance(match, str):
+                        preparations.append(match.strip())
+                    else:
+                        # This handles tuple results from groups
+                        preparations.extend([m.strip() for m in match if m.strip()])
+                
                 # Remove matched preparation from name
                 name = re.sub(pattern, '', name, flags=re.IGNORECASE)
         
-        # Clean up name
-        name = name.strip().strip(',')
+        # Clean up name - remove extra commas and whitespace
+        name = re.sub(r'\s*,\s*$', '', name.strip())
+        name = re.sub(r'\s+', ' ', name)
         
         return name, ', '.join(preparations) if preparations else ''
     

@@ -154,3 +154,68 @@ class UserSession:
     def refresh_activity(self):
         """Update last activity timestamp"""
         self.last_activity = datetime.now()
+
+
+@dataclass
+class ShoppingListItem:
+    """Individual item in a shopping list"""
+    ingredient_name: str
+    total_quantity: float
+    unit: str
+    recipe_names: List[str] = field(default_factory=list)  # Which recipes need this ingredient
+    category: str = ""  # ingredient category for grouping
+    
+    def add_recipe(self, recipe_name: str, quantity: float):
+        """Add a recipe that uses this ingredient"""
+        if recipe_name not in self.recipe_names:
+            self.recipe_names.append(recipe_name)
+        self.total_quantity += quantity
+
+
+@dataclass
+class ShoppingList:
+    """
+    Shopping list generated from recipe collections.
+    Consolidates ingredients across multiple recipes with quantities.
+    """
+    collection_id: int
+    collection_name: str
+    items: List[ShoppingListItem] = field(default_factory=list)
+    generated_at: datetime = field(default_factory=datetime.now)
+    total_recipes: int = 0
+    
+    def add_ingredient(self, ingredient_name: str, quantity: float, unit: str, 
+                      recipe_name: str, category: str = ""):
+        """Add ingredient to shopping list, consolidating quantities"""
+        # Look for existing item
+        existing_item = None
+        for item in self.items:
+            if item.ingredient_name.lower() == ingredient_name.lower() and item.unit.lower() == unit.lower():
+                existing_item = item
+                break
+        
+        if existing_item:
+            existing_item.add_recipe(recipe_name, quantity)
+        else:
+            new_item = ShoppingListItem(
+                ingredient_name=ingredient_name,
+                total_quantity=quantity,
+                unit=unit,
+                recipe_names=[recipe_name],
+                category=category
+            )
+            self.items.append(new_item)
+    
+    def get_items_by_category(self) -> Dict[str, List[ShoppingListItem]]:
+        """Group shopping list items by category"""
+        categories = {}
+        for item in self.items:
+            category = item.category or "Other"
+            if category not in categories:
+                categories[category] = []
+            categories[category].append(item)
+        return categories
+    
+    def get_total_items(self) -> int:
+        """Get total number of unique ingredients"""
+        return len(self.items)

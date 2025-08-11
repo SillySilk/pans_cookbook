@@ -1,0 +1,6 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting bcrypt
+  Downloading bcrypt-4.3.0-cp39-abi3-win_amd64.whl.metadata (10 kB)
+Downloading bcrypt-4.3.0-cp39-abi3-win_amd64.whl (152 kB)
+Installing collected packages: bcrypt
+Successfully installed bcrypt-4.3.0
