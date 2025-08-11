@@ -425,8 +425,8 @@ class ResponsiveDesign:
         # On mobile, default to collapsed to save space
         default_expanded = expanded_on_mobile  # Assume mobile for now
         
-        with st.expander(title, expanded=default_expanded):
-            return True  # Return context for content rendering
+        # Return the expander context manager itself
+        return st.expander(title, expanded=default_expanded)
 
 
 class MobileOptimizations:

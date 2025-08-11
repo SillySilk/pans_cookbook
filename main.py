@@ -54,27 +54,27 @@ def main():
     
     with tab1:
         # Welcome message with responsive layout
-        responsive.create_collapsible_section("Welcome to Pans Cookbook!", "welcome", 
-                                             expanded_on_desktop=True, expanded_on_mobile=False)
-        st.info("""
-        Welcome to Pans Cookbook! This application is currently under development.
-        
-        **Completed Components:**
-        - ✅ Database service with multi-user support
-        - ✅ Authentication system with encrypted API keys
-        - ✅ Web scraping service with robots.txt compliance
-        - ✅ Recipe parsing and validation logic
-        - ✅ Manual validation forms for scraped recipes
-        - ✅ AI integration with LM Studio for recipe enhancement
-        - ✅ AI features UI with ingredient suggestions & instruction improvements
-        - ✅ Advanced filtering and search features
-        - ✅ Responsive web design
-        - ✅ Pantry management with "what can I make" functionality
-        
-        **Coming Next:**
-        - 👥 User management and collections
-        - 🔄 Comprehensive testing
-        """)
+        with responsive.create_collapsible_section("Welcome to Pans Cookbook!", "welcome", 
+                                                  expanded_on_desktop=True, expanded_on_mobile=False):
+            st.info("""
+            Welcome to Pans Cookbook! This application is currently under development.
+            
+            **Completed Components:**
+            - ✅ Database service with multi-user support
+            - ✅ Authentication system with encrypted API keys
+            - ✅ Web scraping service with robots.txt compliance
+            - ✅ Recipe parsing and validation logic
+            - ✅ Manual validation forms for scraped recipes
+            - ✅ AI integration with LM Studio for recipe enhancement
+            - ✅ AI features UI with ingredient suggestions & instruction improvements
+            - ✅ Advanced filtering and search features
+            - ✅ Responsive web design
+            - ✅ Pantry management with "what can I make" functionality
+            
+            **Coming Next:**
+            - 👥 User management and collections
+            - 🔄 Comprehensive testing
+            """)
         
         # System metrics in responsive layout
         metrics = [
