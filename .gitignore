@@ -191,12 +191,5 @@ herbalism.db
 logs/
 *.log
 
-# Reference materials and examples (not part of main project)
-Herbalism app/
-**/Herbalism app/
-*.pdf
-uploads/
-gitignore.txt
-
 # Claude-specific files
 .claude/
