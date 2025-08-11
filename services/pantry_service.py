@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Set, Tuple, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
-from models import Recipe, Ingredient, RecipeIngredient
+from models.recipe_models import Recipe, Ingredient, RecipeIngredient
 from services.database_service import DatabaseService, get_database_service
 from utils import get_logger
 

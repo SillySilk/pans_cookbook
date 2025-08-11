@@ -14,11 +14,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from models import ScrapedRecipe, ParsedRecipe
-from services import DatabaseService, ParsingService, AIService, get_pantry_service
+from services import DatabaseService, ParsingService, AIService
 from ui import ValidationInterface, AIFeaturesInterface, show_ai_status
 from ui.responsive_design import ResponsiveDesign, MobileOptimizations, create_responsive_layout
-from ui.pantry_manager import PantryManagerInterface
 from datetime import datetime
+
+# Import pantry services with error handling for deployment
+try:
+    from services import get_pantry_service
+    from ui.pantry_manager import PantryManagerInterface
+    PANTRY_AVAILABLE = True
+except ImportError as e:
+    print(f"Pantry services not available: {e}")
+    PANTRY_AVAILABLE = False
 
 def main():
     """Main application entry point"""
@@ -111,12 +119,15 @@ def main():
             except Exception as e:
                 st.error(f"❌ AI Features UI: {e}")
             
-            try:
-                pantry_service = get_pantry_service()
-                pantry_ui = PantryManagerInterface(pantry_service)
-                st.success("✅ Pantry Management: Working")
-            except Exception as e:
-                st.error(f"❌ Pantry Management: {e}")
+            if PANTRY_AVAILABLE:
+                try:
+                    pantry_service = get_pantry_service()
+                    pantry_ui = PantryManagerInterface(pantry_service)
+                    st.success("✅ Pantry Management: Working")
+                except Exception as e:
+                    st.error(f"❌ Pantry Management: {e}")
+            else:
+                st.error("❌ Pantry Management: Not available (import error)")
             
             # AI Status
             try:
@@ -131,7 +142,11 @@ def main():
         demo_ai_features()
     
     with tab4:
-        demo_pantry_manager()
+        if PANTRY_AVAILABLE:
+            demo_pantry_manager()
+        else:
+            st.error("❌ Pantry Manager not available due to import issues")
+            st.info("This may be a temporary deployment issue. The feature is fully implemented but not accessible in this environment.")
         
 
 def demo_validation_interface():
@@ -397,6 +412,10 @@ def demo_ai_features():
 
 def demo_pantry_manager():
     """Demo the pantry management interface"""
+    if not PANTRY_AVAILABLE:
+        st.error("❌ Pantry services not available")
+        return
+        
     st.markdown("### 🥬 My Pantry - What Can I Make?")
     st.markdown("Manage your ingredient inventory and discover recipes you can make right now!")
     
