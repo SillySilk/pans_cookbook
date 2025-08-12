@@ -1,0 +1,10 @@
+# PostgreSQL requirements for Pans Cookbook
+psycopg2-binary==2.9.7
+supabase==2.0.4
+
+# Existing requirements (add these to your main requirements.txt)
+streamlit>=1.28.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+pandas>=2.0.0
+python-dotenv>=1.0.0

@@ -9,15 +9,47 @@ Based on traditional parsing with manual validation workflows.
 import sys
 import streamlit as st
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add the project root to the path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from models import ScrapedRecipe, ParsedRecipe
 from services import DatabaseService, ParsingService, AIService
+import tempfile
+import os
 from ui import ValidationInterface, AIFeaturesInterface, show_ai_status
+from ui.recipe_browser import RecipeBrowser
 from ui.responsive_design import ResponsiveDesign, MobileOptimizations, create_responsive_layout
 from datetime import datetime
+
+
+def get_database_service_singleton():
+    """Get singleton database service instance with automatic type detection"""
+    if 'database_service' not in st.session_state:
+        from config.database_config import get_database_service, get_database_info
+        
+        # Get database info for display
+        db_info = get_database_info()
+        
+        # Show which database we're using
+        if 'db_info_shown' not in st.session_state:
+            st.write(f"🗄️ Using database: {db_info['description']}")
+            if db_info['type'] == 'postgresql':
+                st.write(f"   Host: {db_info['host']}")
+            else:
+                st.write(f"   Path: {db_info['path']}")
+            st.session_state.db_info_shown = True
+        
+        # Initialize database service
+        st.session_state.database_service = get_database_service()
+        st.write(f"🔧 Initialized {db_info['type'].upper()} database service")
+    
+    return st.session_state.database_service
 
 # Import pantry services with error handling for deployment
 try:
@@ -38,6 +70,260 @@ except ImportError as e:
     print(f"AI parsing services not available: {e}")
     AI_PARSING_AVAILABLE = False
 
+def add_core_pantry_ingredients(db):
+    """Add core pantry ingredients from CSV file with categorization"""
+    import csv
+    from services import get_ingredient_service
+    
+    csv_path = r"C:\AI\cookbook\orphan\Core_Pantry_Ingredient_List.csv"
+    
+    # Get ingredient service
+    ingredient_service = get_ingredient_service(db)
+    
+    # Ingredient categorization mapping
+    ingredient_categories = {
+        # Proteins
+        'chicken breast': 'protein',
+        'chicken thighs': 'protein', 
+        'pork chops': 'protein',
+        'pork tenderloin': 'protein',
+        'stew meat': 'protein',
+        'boneless pork chop tenderloins': 'protein',
+        'shredded chicken': 'protein',
+        'ground beef': 'protein',
+        'bacon': 'protein',
+        'salmon': 'protein',
+        'shrimp': 'protein',
+        
+        # Dairy
+        'heavy cream': 'dairy',
+        'parmesan cheese': 'dairy',
+        'shredded mozzarella': 'dairy',
+        'ricotta cheese': 'dairy',
+        'sour cream': 'dairy',
+        'butter': 'dairy',
+        'milk': 'dairy',
+        'yogurt': 'dairy',
+        'cheddar cheese': 'dairy',
+        
+        # Grains & Pasta
+        'egg noodles': 'grains',
+        'rotini pasta': 'grains',
+        'fettuccine': 'grains',
+        'italian style rice': 'grains',
+        'israeli couscous': 'grains',
+        'pearl couscous': 'grains',
+        'breadcrumbs': 'grains',
+        'panko breadcrumbs': 'grains',
+        'flour': 'grains',
+        'tins of biscuits': 'grains',
+        'mac and cheese boxes': 'grains',
+        
+        # Vegetables
+        'yellow onion': 'vegetables',
+        'bell peppers': 'vegetables',
+        'zucchini': 'vegetables',
+        'frozen peas': 'vegetables',
+        'frozen mixed vegetables': 'vegetables',
+        'frozen corn': 'vegetables',
+        'frozen green beans': 'vegetables',
+        'carrots': 'vegetables',
+        'potatoes': 'vegetables',
+        'garlic': 'vegetables',
+        
+        # Pantry/Condiments
+        'beef bouillon cubes': 'pantry',
+        'cream of mushroom soup': 'pantry',
+        'condensed cream soup': 'pantry',
+        'beef broth': 'pantry',
+        'chicken broth': 'pantry',
+        'colseslaw dressing': 'condiments',
+        'caesar dressing': 'condiments',
+        'worcestershire sauce': 'condiments',
+        'marsala cooking wine': 'pantry',
+        'white wine': 'pantry',
+        'balsamic vinegar': 'condiments',
+        'apple cider vinegar': 'condiments',
+        'red wine vinegar': 'condiments',
+        'lemon juice': 'condiments',
+        'olive oil': 'pantry',
+        'avocado oil spray': 'pantry',
+        'sugar': 'pantry',
+        'special dark chocolate': 'pantry'
+    }
+    
+    added_count = 0
+    
+    try:
+        # Read CSV file
+        with open(csv_path, 'r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            next(reader)  # Skip header row
+            
+            for row in reader:
+                if row and len(row) > 0:
+                    ingredient_name = row[0].strip().lower()
+                    if not ingredient_name:
+                        continue
+                    
+                    # Get category for this ingredient
+                    category = ingredient_categories.get(ingredient_name, 'pantry')
+                    
+                    # Check if ingredient already exists (search for exact match)
+                    existing = db.search_ingredients(ingredient_name)
+                    name_exists = any(ing.name.lower() == ingredient_name for ing in existing)
+                    
+                    st.write(f"Debug: Processing '{ingredient_name}' - Existing: {len(existing)}, Name exists: {name_exists}")
+                    
+                    if not name_exists:
+                        # Add new ingredient using ingredient service
+                        ingredient = ingredient_service.create_ingredient(
+                            name=ingredient_name,
+                            category=category,
+                            common_substitutes=[],
+                            storage_tips="",
+                            nutritional_data={}
+                        )
+                        if ingredient:
+                            added_count += 1
+                            st.write(f"✅ Successfully added: {ingredient_name} (category: {category}, ID: {ingredient.id})")
+                        else:
+                            st.write(f"❌ Failed to create: {ingredient_name}")
+                    else:
+                        st.write(f"⏭️ Skipped (already exists): {ingredient_name}")
+    
+    except FileNotFoundError:
+        st.error(f"❌ Could not find CSV file: {csv_path}")
+        return 0
+    except Exception as e:
+        st.error(f"❌ Error reading CSV file: {e}")
+        return 0
+    
+    return added_count
+
+def migrate_database_data(source_db_path, target_db_service):
+    """Migrate ingredients and recipes from one database to another"""
+    import sqlite3
+    from services import get_ingredient_service
+    
+    migrated_count = 0
+    
+    try:
+        # Connect to source database
+        source_conn = sqlite3.connect(source_db_path)
+        source_conn.row_factory = sqlite3.Row
+        
+        # Get ingredient service for target database
+        ingredient_service = get_ingredient_service(target_db_service)
+        
+        # Migrate ingredients
+        cursor = source_conn.cursor()
+        cursor.execute("SELECT * FROM ingredients")
+        source_ingredients = cursor.fetchall()
+        
+        st.write(f"Found {len(source_ingredients)} ingredients in {source_db_path}")
+        
+        for row in source_ingredients:
+            ingredient_name = row['name'].lower()
+            
+            # Check if ingredient already exists in target
+            existing = target_db_service.search_ingredients(ingredient_name)
+            name_exists = any(ing.name.lower() == ingredient_name for ing in existing)
+            
+            if not name_exists:
+                # Migrate the ingredient
+                ingredient = ingredient_service.create_ingredient(
+                    name=ingredient_name,
+                    category=row['category'] or 'pantry',
+                    common_substitutes=[],
+                    storage_tips=row.get('storage_tips', ''),
+                    nutritional_data={}
+                )
+                if ingredient:
+                    migrated_count += 1
+                    st.write(f"✅ Migrated: {ingredient_name}")
+                else:
+                    st.write(f"❌ Failed to migrate: {ingredient_name}")
+            else:
+                st.write(f"⏭️ Skipped (exists): {ingredient_name}")
+        
+        source_conn.close()
+        
+    except Exception as e:
+        st.error(f"❌ Migration failed: {e}")
+        import traceback
+        with st.expander("Migration Error Details"):
+            st.code(traceback.format_exc())
+    
+    return migrated_count
+
+def clear_database_completely(db_service):
+    """Clear all data from the database"""
+    try:
+        with db_service.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get all table names
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = cursor.fetchall()
+            
+            st.write("🗑️ Clearing all data from tables:")
+            
+            # Clear each table
+            for table in tables:
+                table_name = table[0]
+                if table_name != 'sqlite_sequence':  # Don't clear system table
+                    cursor.execute(f"DELETE FROM {table_name}")
+                    st.write(f"- Cleared table: {table_name}")
+            
+            # Reset auto-increment counters
+            cursor.execute("DELETE FROM sqlite_sequence")
+            
+            conn.commit()
+            st.write("✅ All data cleared successfully!")
+            return True
+            
+    except Exception as e:
+        st.error(f"❌ Error clearing database: {e}")
+        import traceback
+        with st.expander("Clear Database Error Details"):
+            st.code(traceback.format_exc())
+        return False
+
+def recreate_database_from_scratch():
+    """Delete the database file and recreate it"""
+    try:
+        import os
+        from pathlib import Path
+        from config.database_config import DatabaseConfig
+        
+        db_config = DatabaseConfig.get_database_config()
+        db_path = db_config.get('path', 'database/pans_cookbook.db')
+        
+        # Delete the database file if it exists
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            st.write(f"🗑️ Deleted database file: {db_path}")
+        
+        # Clear session state to force recreation
+        if 'database_service' in st.session_state:
+            del st.session_state['database_service']
+        if 'db_path_shown' in st.session_state:
+            del st.session_state['db_path_shown']
+        
+        # Create new database service (will auto-initialize schema)
+        new_db = get_database_service_singleton()
+        st.write("✅ Created new database with fresh schema")
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"❌ Error recreating database: {e}")
+        import traceback
+        with st.expander("Recreate Database Error Details"):
+            st.code(traceback.format_exc())
+        return False
+
 def main():
     """Main application entry point"""
     st.set_page_config(
@@ -57,10 +343,11 @@ def main():
     tab_config = [
         {"label": "Status", "icon": "📊"},
         {"label": "Smart Parser", "icon": "🧠"},
+        {"label": "Recipe Browser", "icon": "📚"},
         {"label": "AI Features", "icon": "🤖"},
         {"label": "My Pantry", "icon": "🥬"}
     ]
-    tab1, tab2, tab3, tab4 = responsive.create_responsive_tabs(tab_config)
+    tab1, tab2, tab3, tab4, tab5 = responsive.create_responsive_tabs(tab_config)
     
     with tab1:
         # Welcome message with responsive layout
@@ -98,7 +385,7 @@ def main():
         with responsive.create_collapsible_section("System Status", "status", 
                                                   expanded_on_desktop=False, expanded_on_mobile=False):
             try:
-                db = DatabaseService(":memory:")
+                db = get_database_service_singleton()
                 st.success("✅ Database service: Working")
             except Exception as e:
                 st.error(f"❌ Database service: {e}")
@@ -117,13 +404,13 @@ def main():
                 st.error(f"❌ Parsing service: {e}")
             
             try:
-                validation_ui = ValidationInterface(ParsingService(), DatabaseService(":memory:"))
+                validation_ui = ValidationInterface(ParsingService(), get_database_service_singleton())
                 st.success("✅ Validation UI: Working")
             except Exception as e:
                 st.error(f"❌ Validation UI: {e}")
             
             try:
-                ai_service = AIService(DatabaseService(":memory:"))
+                ai_service = AIService(get_database_service_singleton())
                 ai_ui = AIFeaturesInterface(ai_service)
                 st.success("✅ AI Features UI: Working")
             except Exception as e:
@@ -144,14 +431,172 @@ def main():
                 show_ai_status(compact=False)
             except Exception as e:
                 st.error(f"❌ AI Status Check: {e}")
+        
+        # Database inspection section
+        with responsive.create_collapsible_section("🗄️ Database Inspection", "db_inspect", 
+                                                  expanded_on_desktop=False, expanded_on_mobile=False):
+            try:
+                db = get_database_service_singleton()
+                from config.database_config import DatabaseConfig
+                db_config = DatabaseConfig.get_database_config()
+                db_path = db_config.get('path', 'database/pans_cookbook.db')
+                st.write(f"**Database Path:** `{db_path}`")
+                
+                # Get database stats
+                stats = db.get_database_stats()
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Recipes", stats.get('recipes', 0))
+                with col2:
+                    st.metric("Ingredients", stats.get('ingredients', 0))
+                with col3:
+                    st.metric("Pantry Items", stats.get('user_pantry', 0))
+                
+                # Show recent recipes
+                recent_recipes = db.get_all_recipes(user_id=1, limit=5)
+                if recent_recipes:
+                    st.write("**Recent Recipes:**")
+                    for recipe in recent_recipes:
+                        st.write(f"- ID: {recipe.id}, Name: {recipe.name}")
+                else:
+                    st.write("**No recipes found in database**")
+                
+                # Show all existing database files in current directory only
+                import glob
+                import os
+                db_files = [f for f in glob.glob("*.db") if os.path.isfile(f)]
+                if db_files:
+                    st.write("**All database files found:**")
+                    for db_file in db_files:
+                        size = os.path.getsize(db_file)
+                        is_current = "👈 CURRENT" if db_file == db_path else ""
+                        st.write(f"- `{db_file}`: {size} bytes {is_current}")
+                
+                # Show database file info
+                if db_path != ":memory:" and os.path.exists(db_path):
+                    file_size = os.path.getsize(db_path)
+                    st.write(f"**Current database file size:** {file_size} bytes")
+                    
+                    # Check if file is empty or corrupted
+                    if file_size == 0:
+                        st.error("⚠️ Database file is empty!")
+                    elif file_size < 100:
+                        st.warning("⚠️ Database file seems very small")
+                
+                # Show detailed ingredient list
+                all_ingredients = db.get_all_ingredients()
+                if all_ingredients:
+                    st.write(f"**All {len(all_ingredients)} ingredients in database:**")
+                    
+                    # Group by category
+                    from collections import defaultdict
+                    by_category = defaultdict(list)
+                    for ing in all_ingredients:
+                        by_category[ing.category or "Uncategorized"].append(f"{ing.name} (ID: {ing.id})")
+                    
+                    for category, ingredients in sorted(by_category.items()):
+                        with st.expander(f"{category.title()} ({len(ingredients)})", expanded=False):
+                            for ingredient in sorted(ingredients):
+                                st.write(f"- {ingredient}")
+                else:
+                    st.warning("**No ingredients found in current database**")
+                
+            except Exception as e:
+                st.error(f"❌ Database inspection failed: {e}")
+                import traceback
+                with st.expander("Debug Traceback"):
+                    st.code(traceback.format_exc())
+        
+        # Ingredient management section
+        with responsive.create_collapsible_section("📦 Ingredient Management", "ingredients", 
+                                                  expanded_on_desktop=False, expanded_on_mobile=False):
+            try:
+                db = get_database_service_singleton()
+                
+                # Show current ingredient count
+                all_ingredients = db.get_all_ingredients()
+                st.metric("Total Ingredients", len(all_ingredients))
+                
+                # Add core pantry ingredients from CSV
+                if st.button("➕ Add Core Pantry Ingredients from CSV"):
+                    added_count = add_core_pantry_ingredients(db)
+                    if added_count > 0:
+                        st.success(f"✅ Added {added_count} new ingredients!")
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ All core pantry ingredients already exist in the database.")
+                
+                # Database migration tools
+                st.markdown("---")
+                st.markdown("**Database Migration Tools:**")
+                
+                # Check for existing database files in current directory only
+                import glob
+                import os
+                other_db_files = [f for f in glob.glob("*.db") if f != db_path and os.path.isfile(f)]
+                
+                if other_db_files:
+                    st.write(f"Found other database files: {', '.join(other_db_files)}")
+                    
+                    selected_db = st.selectbox("Migrate data from:", other_db_files)
+                    
+                    if st.button(f"🔄 Migrate data from {selected_db}"):
+                        migrate_count = migrate_database_data(selected_db, db)
+                        if migrate_count > 0:
+                            st.success(f"✅ Migrated {migrate_count} items!")
+                            st.rerun()
+                        else:
+                            st.info("ℹ️ No new data to migrate.")
+                else:
+                    st.info("No other database files found to migrate from.")
+                
+                # Database reset tools
+                st.markdown("---")
+                st.markdown("**🚨 Database Reset Tools:**")
+                
+                if st.button("🗑️ CLEAR ALL DATA (Reset Database)", type="secondary"):
+                    if clear_database_completely(db):
+                        st.success("✅ Database cleared successfully!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to clear database")
+                
+                if st.button("🔄 RECREATE DATABASE FROM SCRATCH", type="secondary"):
+                    if recreate_database_from_scratch():
+                        st.success("✅ Database recreated from scratch!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to recreate database")
+                
+                # Show ingredient categories
+                if all_ingredients:
+                    from collections import defaultdict
+                    by_category = defaultdict(list)
+                    for ing in all_ingredients:
+                        by_category[ing.category or "Uncategorized"].append(ing.name)
+                    
+                    st.write("**Ingredients by Category:**")
+                    for category, ingredients in sorted(by_category.items()):
+                        with st.expander(f"{category.title()} ({len(ingredients)})"):
+                            st.write(", ".join(sorted(ingredients)))
+                
+            except Exception as e:
+                st.error(f"❌ Ingredient management failed: {e}")
+                import traceback
+                with st.expander("Debug Traceback"):
+                    st.code(traceback.format_exc())
     
     with tab2:
         demo_smart_parser()
     
     with tab3:
-        demo_ai_features()
+        demo_recipe_browser()
     
     with tab4:
+        demo_ai_features()
+    
+    with tab5:
         if PANTRY_AVAILABLE:
             demo_pantry_manager()
         else:
@@ -171,7 +616,7 @@ def demo_smart_parser():
         return
     
     # Initialize services
-    db = DatabaseService(":memory:")
+    db = get_database_service_singleton()
     ai_service = AIService(db)
     
     if not ai_service.is_ai_available():
@@ -472,7 +917,7 @@ def demo_validation_interface():
     st.markdown("Add recipes by pasting text or uploading files, then validate before saving to your cookbook.")
     
     # Initialize services
-    db = DatabaseService(":memory:")
+    db = get_database_service_singleton()
     parser = ParsingService(db)
     validation_ui = ValidationInterface(parser, db)
     
@@ -690,13 +1135,133 @@ Serves: 36 cookies""",
                 st.warning("❌ Recipe was rejected during validation.")
 
 
+def demo_recipe_browser():
+    """Demo the recipe browser interface using the full RecipeBrowser class"""
+    st.markdown("### 📚 Recipe Browser")
+    st.markdown("Browse, search, and manage your recipe collection with smart pantry integration.")
+    
+    try:
+        # Initialize recipe browser with database
+        db = get_database_service_singleton()
+        browser = RecipeBrowser(db)
+        
+        # Check if we have recipes
+        all_recipes = db.get_all_recipes(user_id=1, limit=50)
+        
+        if not all_recipes:
+            st.info("🍽️ No recipes found. Use the **Smart Parser** tab to add some recipes!")
+            
+            # DISABLED: Demo recipes removed per user request
+            # Use Smart Parser tab to add real recipes manually or via scraping
+            if False:  # Disabled code block
+                with st.spinner("Adding sample recipes..."):
+                    # First ensure we have some basic ingredients
+                    sample_ingredients = [
+                        ("All-Purpose Flour", "grain"),
+                        ("Sugar", "sweetener"), 
+                        ("Milk", "dairy"),
+                        ("Pasta", "grain"),
+                        ("Olive Oil", "oil"),
+                        ("Garlic", "vegetable")
+                    ]
+                    
+                    ingredient_ids = {}
+                    for name, category in sample_ingredients:
+                        ingredient = db.create_ingredient(name, category)
+                        if ingredient:
+                            ingredient_ids[name] = ingredient.id
+                    
+                    # Add sample recipes
+                    sample_recipes = [
+                        {
+                            "name": "Classic Pancakes",
+                            "description": "Fluffy breakfast pancakes",
+                            "instructions": "1. Mix dry ingredients in a bowl.\n2. Add wet ingredients and stir until just combined.\n3. Cook on hot griddle until golden brown on both sides.",
+                            "prep_time_minutes": 10,
+                            "cook_time_minutes": 15,
+                            "servings": 4,
+                            "difficulty_level": "easy",
+                            "cuisine_type": "American",
+                            "meal_category": "breakfast",
+                            "ingredients": [
+                                {"ingredient_id": ingredient_ids.get("All-Purpose Flour", 1), "quantity": 2, "unit": "cups", "preparation_note": ""},
+                                {"ingredient_id": ingredient_ids.get("Sugar", 2), "quantity": 2, "unit": "tbsp", "preparation_note": ""},
+                                {"ingredient_id": ingredient_ids.get("Milk", 3), "quantity": 1.5, "unit": "cups", "preparation_note": ""}
+                            ]
+                        },
+                        {
+                            "name": "Garlic Pasta",
+                            "description": "Simple and delicious pasta with garlic and olive oil",
+                            "instructions": "1. Cook pasta according to package directions.\n2. Heat olive oil in a pan.\n3. Add minced garlic and cook until fragrant.\n4. Toss with pasta and serve.",
+                            "prep_time_minutes": 5,
+                            "cook_time_minutes": 20,
+                            "servings": 2,
+                            "difficulty_level": "easy",
+                            "cuisine_type": "Italian",
+                            "meal_category": "dinner",
+                            "ingredients": [
+                                {"ingredient_id": ingredient_ids.get("Pasta", 4), "quantity": 8, "unit": "oz", "preparation_note": ""},
+                                {"ingredient_id": ingredient_ids.get("Olive Oil", 5), "quantity": 3, "unit": "tbsp", "preparation_note": ""},
+                                {"ingredient_id": ingredient_ids.get("Garlic", 6), "quantity": 3, "unit": "cloves", "preparation_note": "minced"}
+                            ]
+                        }
+                    ]
+                    
+                    for recipe_data in sample_recipes:
+                        recipe = db.create_recipe(recipe_data, user_id=1)
+                        if recipe:
+                            st.success(f"✅ Added: {recipe.name} (ID: {recipe.id})")
+                        else:
+                            st.error(f"❌ Failed to create recipe: {recipe_data['name']}")
+                    
+                    st.rerun()
+        else:
+            # Use the full RecipeBrowser interface
+            st.markdown("---")
+            
+            # Check if user wants to see detailed recipe view
+            if 'selected_recipe_id' in st.session_state:
+                recipe_id = st.session_state['selected_recipe_id']
+                st.write(f"**Debug**: Looking for recipe ID: {recipe_id}")
+                
+                selected_recipe = db.get_recipe_by_id(recipe_id)
+                if selected_recipe:
+                    # Back button
+                    if st.button("← Back to Recipe List"):
+                        del st.session_state['selected_recipe_id']
+                        st.rerun()
+                    
+                    # Render detailed recipe view
+                    user_pantry = st.session_state.get(browser.PANTRY_KEY, set())
+                    browser.render_recipe_details(selected_recipe, user_pantry)
+                else:
+                    st.error(f"Recipe not found for ID: {recipe_id}")
+                    
+                    # Debug: show all recipes
+                    all_recipes_debug = db.get_all_recipes(user_id=1, limit=10)
+                    st.write(f"**Debug**: Found {len(all_recipes_debug)} recipes in database:")
+                    for r in all_recipes_debug:
+                        st.write(f"- ID: {r.id}, Name: {r.name}")
+                    
+                    del st.session_state['selected_recipe_id']
+            else:
+                # Render main recipe browser interface
+                browser.render_recipe_browser(user_id=1)
+    
+    except Exception as e:
+        st.error(f"Error loading recipe browser: {e}")
+        import traceback
+        with st.expander("Debug Info"):
+            st.code(traceback.format_exc())
+
+
 def demo_ai_features():
     """Demo the AI features interface with sample data"""
     st.markdown("### 🤖 AI Features Demo")
     st.markdown("Experience AI-powered recipe enhancements and suggestions.")
     
     # Initialize AI services
-    db = DatabaseService(":memory:")
+    db = get_database_service_singleton()
     ai_service = AIService(db)
     ai_ui = AIFeaturesInterface(ai_service, db)
     
@@ -737,46 +1302,22 @@ def demo_pantry_manager():
     st.markdown("Manage your ingredient inventory and discover recipes you can make right now!")
     
     # Initialize pantry services  
-    db = DatabaseService(":memory:")
+    db = get_database_service_singleton()
     pantry_service = get_pantry_service(db)
     pantry_ui = PantryManagerInterface(pantry_service)
     
     # Demo user ID
     demo_user_id = 1
     
-    # Add some sample ingredients to the database for demo
-    try:
-        # Ensure we have some basic ingredients
-        from services import get_ingredient_service
-        ingredient_service = get_ingredient_service(db)
-        
-        # Add common pantry ingredients
-        sample_ingredients = [
-            ("Salt", "seasoning"),
-            ("Black Pepper", "seasoning"),
-            ("Olive Oil", "oil"), 
-            ("Butter", "dairy"),
-            ("Garlic", "vegetable"),
-            ("Onion", "vegetable"),
-            ("All-Purpose Flour", "grain"),
-            ("Sugar", "sweetener"),
-            ("Eggs", "protein"),
-            ("Chicken Breast", "protein"),
-            ("Milk", "dairy"),
-            ("Tomato", "vegetable"),
-            ("Basil", "herb"),
-            ("Mozzarella Cheese", "dairy"),
-            ("Ground Beef", "protein")
-        ]
-        
-        for name, category in sample_ingredients:
-            try:
-                ingredient_service.create_ingredient(name, category)
-            except:
-                pass  # Ingredient might already exist
-        
-        # Create a few sample recipes with ingredients
-        from models import Recipe
+    # DISABLED: Auto-population of sample ingredients
+    # This was causing issues with CSV import and data consistency
+    # Users should manually add ingredients via CSV import or pantry interface
+    
+    # Previous code automatically added 15 sample ingredients which interfered with clean database state
+    
+    # DISABLED: All sample recipe creation removed per user request
+    # Users should add recipes manually via Smart Parser tab
+    if False:  # Disabled code block
         sample_recipes = [
             {
                 'name': 'Simple Scrambled Eggs',
@@ -840,8 +1381,6 @@ def demo_pantry_manager():
             except Exception as e:
                 pass  # Recipe might already exist
         
-    except Exception as e:
-        st.warning(f"Demo setup issue: {e}")
     
     # Check if user has a pantry setup
     user_pantry = pantry_service.get_user_pantry(demo_user_id)
@@ -998,7 +1537,7 @@ def demo_pantry_manager():
                         st.code(traceback.format_exc())
     else:
         # Show main pantry interface
-        pantry_ui.render_pantry_interface(demo_user_id)
+        pantry_ui.render_pantry_manager(demo_user_id)
         
         # Show what recipes can be made
         st.markdown("---")

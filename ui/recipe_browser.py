@@ -13,6 +13,7 @@ import pandas as pd
 
 from models import Recipe, Ingredient, RecipeIngredient
 from services import DatabaseService, IngredientService, get_database_service, get_ingredient_service
+from services.pantry_service import PantryService, get_pantry_service
 from utils import get_logger
 
 logger = get_logger(__name__)
@@ -27,9 +28,11 @@ class RecipeBrowser:
     """
     
     def __init__(self, database_service: Optional[DatabaseService] = None, 
-                 ingredient_service: Optional[IngredientService] = None):
+                 ingredient_service: Optional[IngredientService] = None,
+                 pantry_service: Optional[PantryService] = None):
         self.db = database_service or get_database_service()
         self.ingredient_service = ingredient_service or get_ingredient_service()
+        self.pantry_service = pantry_service or get_pantry_service(self.db)
         
         # Initialize custom CSS styling
         self._inject_custom_css()
@@ -39,14 +42,37 @@ class RecipeBrowser:
         self.SEARCH_KEY = "recipe_search_query"
         self.FILTER_KEY = "recipe_filters"
     
-    def render_pantry_management(self):
+    def _load_pantry_from_database(self, user_id: int = 1) -> Set[int]:
+        """Load user's pantry from database and sync with session state"""
+        try:
+            pantry_items = self.pantry_service.get_user_pantry(user_id)
+            available_ingredient_ids = {
+                item.ingredient_id for item in pantry_items if item.is_available
+            }
+            # Update session state to match database
+            st.session_state[self.PANTRY_KEY] = available_ingredient_ids
+            return available_ingredient_ids
+        except Exception as e:
+            logger.error(f"Error loading pantry from database: {e}")
+            # Fallback to session state
+            return st.session_state.get(self.PANTRY_KEY, set())
+    
+    def _sync_pantry_to_database(self, user_id: int = 1):
+        """Sync session state pantry selections to database"""
+        try:
+            pantry_ingredient_ids = st.session_state.get(self.PANTRY_KEY, set())
+            for ingredient_id in pantry_ingredient_ids:
+                self.pantry_service.update_pantry_item(user_id, ingredient_id, True, "plenty")
+        except Exception as e:
+            logger.error(f"Error syncing pantry to database: {e}")
+    
+    def render_pantry_management(self, user_id: int = 1):
         """Render the persistent pantry management interface"""
         st.header("🥫 My Pantry")
         st.markdown("Check off the ingredients you have available. Your selections will be remembered.")
         
-        # Initialize pantry in session state if not exists
-        if self.PANTRY_KEY not in st.session_state:
-            st.session_state[self.PANTRY_KEY] = set()
+        # Load pantry from database (this will update session state)
+        current_pantry = self._load_pantry_from_database(user_id)
         
         # Get all ingredients grouped by category
         all_ingredients = self.ingredient_service.get_all_ingredients()
@@ -78,7 +104,7 @@ class RecipeBrowser:
             
             if filtered_ingredients:
                 st.markdown(f"**Search Results ({len(filtered_ingredients)} found):**")
-                self._render_ingredient_checkboxes(filtered_ingredients, "search_results")
+                self._render_ingredient_checkboxes(filtered_ingredients, "search_results", user_id)
             else:
                 st.info("No ingredients found matching your search.")
         
@@ -90,7 +116,8 @@ class RecipeBrowser:
                 with st.expander(f"📦 {category.title()} ({len(ingredients_by_category[category])})", expanded=False):
                     self._render_ingredient_checkboxes(
                         ingredients_by_category[category], 
-                        f"category_{category}"
+                        f"category_{category}",
+                        user_id
                     )
         
         with col2:
@@ -119,12 +146,12 @@ class RecipeBrowser:
                 for category, count in sorted(pantry_by_category.items()):
                     st.write(f"• {category}: {count}")
     
-    def render_recipe_browser(self):
+    def render_recipe_browser(self, user_id: int = 1):
         """Render the main recipe browsing interface"""
         st.header("📚 Recipe Browser")
         
-        # Get user's pantry
-        user_pantry = st.session_state.get(self.PANTRY_KEY, set())
+        # Load pantry from database and get user's pantry
+        user_pantry = self._load_pantry_from_database(user_id)
         pantry_count = len(user_pantry)
         
         if pantry_count == 0:
@@ -316,7 +343,7 @@ class RecipeBrowser:
             st.markdown("### 🔗 Source")
             st.markdown(f"[Original Recipe]({recipe.source_url})")
     
-    def _render_ingredient_checkboxes(self, ingredients: List[Ingredient], container_key: str):
+    def _render_ingredient_checkboxes(self, ingredients: List[Ingredient], container_key: str, user_id: int = 1):
         """Render ingredient checkboxes for pantry management"""
         # Sort ingredients alphabetically
         sorted_ingredients = sorted(ingredients, key=lambda x: x.name)
@@ -339,11 +366,15 @@ class RecipeBrowser:
                     key=f"pantry_check_{container_key}_{ingredient.id}"
                 )
                 
-                # Update pantry state
+                # Update pantry state and sync to database
                 if checked and not is_checked:
                     st.session_state[self.PANTRY_KEY].add(ingredient.id)
+                    # Add to database
+                    self.pantry_service.update_pantry_item(user_id, ingredient.id, True, "plenty")
                 elif not checked and is_checked:
                     st.session_state[self.PANTRY_KEY].discard(ingredient.id)
+                    # Remove from database
+                    self.pantry_service.update_pantry_item(user_id, ingredient.id, False, None)
     
     def _render_recipe_card(self, recipe: Recipe, user_pantry: Set[int]):
         """Render a recipe card with availability status"""
@@ -569,6 +600,7 @@ class RecipeBrowser:
 
 
 def create_recipe_browser(database_service: Optional[DatabaseService] = None,
-                         ingredient_service: Optional[IngredientService] = None) -> RecipeBrowser:
+                         ingredient_service: Optional[IngredientService] = None,
+                         pantry_service: Optional[PantryService] = None) -> RecipeBrowser:
     """Factory function to create recipe browser"""
-    return RecipeBrowser(database_service, ingredient_service)
+    return RecipeBrowser(database_service, ingredient_service, pantry_service)

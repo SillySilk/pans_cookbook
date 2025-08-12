@@ -412,7 +412,19 @@ class PantryService:
                 return exact_match
             
             # Create new ingredient
-            return self.db.create_ingredient(name, category)
+            new_ingredient = self.db.create_ingredient(name, category)
+            if new_ingredient:
+                return new_ingredient
+            
+            # If creation failed due to constraint, search again (race condition)
+            ingredients = self.db.search_ingredients(name)
+            exact_match = next((ing for ing in ingredients if ing.name.lower() == name.lower()), None)
+            if exact_match:
+                logger.debug(f"Ingredient {name} was created by another thread")
+                return exact_match
+            
+            logger.warning(f"Failed to find or create ingredient: {name}")
+            return None
             
         except Exception as e:
             logger.error(f"Failed to find/create ingredient {name}: {e}")

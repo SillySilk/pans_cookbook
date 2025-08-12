@@ -175,18 +175,19 @@ CREATE INDEX IF NOT EXISTS idx_user_pantry_available ON user_pantry (is_availabl
 INSERT OR IGNORE INTO users (email, password_hash, username, first_name, is_verified) 
 VALUES ('admin@panscookbook.local', 'placeholder_hash', 'admin', 'Administrator', 1);
 
--- Common ingredient categories
-INSERT OR IGNORE INTO ingredients (name, category) VALUES 
-('Salt', 'seasoning'),
-('Black Pepper', 'seasoning'), 
-('Olive Oil', 'oil'),
-('Butter', 'dairy'),
-('Garlic', 'vegetable'),
-('Onion', 'vegetable'),
-('All-Purpose Flour', 'grain'),
-('Sugar', 'sweetener'),
-('Eggs', 'protein'),
-('Chicken Breast', 'protein');
+-- DISABLED: Common ingredient auto-insertion removed per user request
+-- Users should manually add ingredients via CSV import or pantry interface
+-- INSERT OR IGNORE INTO ingredients (name, category) VALUES 
+-- ('Salt', 'seasoning'),
+-- ('Black Pepper', 'seasoning'), 
+-- ('Olive Oil', 'oil'),
+-- ('Butter', 'dairy'),
+-- ('Garlic', 'vegetable'),
+-- ('Onion', 'vegetable'),
+-- ('All-Purpose Flour', 'grain'),
+-- ('Sugar', 'sweetener'),
+-- ('Eggs', 'protein'),
+-- ('Chicken Breast', 'protein');
 
 -- Default user collection
 INSERT OR IGNORE INTO collections (name, description, user_id, is_favorite)

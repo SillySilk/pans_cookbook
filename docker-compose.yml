@@ -1,0 +1,23 @@
+# Docker Compose for local PostgreSQL development
+# Run: docker-compose up -d
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: pans_cookbook_postgres
+    environment:
+      POSTGRES_DB: pans_cookbook
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

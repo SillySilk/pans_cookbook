@@ -9,6 +9,7 @@ with enhancements for multi-user web deployment.
 import sqlite3
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import List, Optional, Dict, Set, Tuple, Any
 from contextlib import contextmanager
@@ -34,29 +35,124 @@ class DatabaseService:
         from pathlib import Path
         project_root = Path(__file__).parent.parent
         self.schema_path = project_root / "database_schema.sql"
-        # Keep persistent connection for in-memory databases
-        self._persistent_conn = None
-        if db_path == ":memory:":
-            self._persistent_conn = sqlite3.connect(db_path)
-            self._persistent_conn.row_factory = sqlite3.Row
+        # Thread-local storage for in-memory database connections
+        self._local = threading.local()
+        self._is_memory_db = db_path == ":memory:"
         self._ensure_database_exists()
     
     def _ensure_database_exists(self):
         """Initialize database if it doesn't exist"""
-        db_file = Path(self.db_path)
-        if not db_file.exists():
-            logger.info(f"Creating new database: {self.db_path}")
-            self.initialize_database()
+        if self._is_memory_db:
+            # In-memory databases don't exist as files
+            logger.info("Using in-memory database with thread-local connections")
+        else:
+            db_file = Path(self.db_path)
+            if not db_file.exists() or db_file.stat().st_size == 0:
+                logger.info(f"Creating new database: {self.db_path}")
+                self.initialize_database()
+            else:
+                # Verify the database has the required tables
+                try:
+                    with self.get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_pantry'")
+                        if not cursor.fetchone():
+                            logger.warning("Database file exists but missing tables, reinitializing...")
+                            self.initialize_database()
+                except Exception as e:
+                    logger.error(f"Error checking database tables: {e}")
+                    self.initialize_database()
     
+    def _get_thread_connection(self):
+        """Get or create thread-local connection for in-memory databases"""
+        if not hasattr(self._local, 'connection') or self._local.connection is None:
+            self._local.connection = sqlite3.connect(self.db_path)
+            self._local.connection.row_factory = sqlite3.Row
+            # Initialize schema for new thread-local connection
+            if self._is_memory_db:
+                self._initialize_connection_schema(self._local.connection)
+                logger.debug(f"Created new thread-local connection for thread {threading.current_thread().ident}")
+        elif self._is_memory_db:
+            # Verify schema exists for existing connection
+            self._verify_schema_exists(self._local.connection)
+        return self._local.connection
+    
+    def _verify_schema_exists(self, conn):
+        """Verify that required tables exist, reinitialize if missing"""
+        try:
+            cursor = conn.cursor()
+            # Check for a key table
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_pantry'")
+            if not cursor.fetchone():
+                logger.warning("Schema tables missing, reinitializing...")
+                self._initialize_connection_schema(conn)
+        except Exception as e:
+            logger.error(f"Error verifying schema: {e}")
+            self._initialize_connection_schema(conn)
+    
+    def _initialize_connection_schema(self, conn):
+        """Initialize schema for a new connection"""
+        try:
+            schema_file = Path(self.schema_path)
+            if schema_file.exists():
+                with open(schema_file, 'r', encoding='utf-8') as f:
+                    schema_sql = f.read()
+                
+                # Execute schema in chunks (split by ; and filter empty)
+                statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip()]
+                logger.debug(f"Executing {len(statements)} schema statements")
+                
+                for i, statement in enumerate(statements):
+                    try:
+                        conn.execute(statement)
+                        if i < 5:  # Log first few statements for debugging
+                            logger.debug(f"Executed statement {i}: {statement[:50]}...")
+                    except Exception as e:
+                        logger.warning(f"Failed to execute statement {i}: {e}")
+                        # Continue with other statements
+                
+                conn.commit()
+                
+                # Verify key tables exist
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = [row[0] for row in cursor.fetchall()]
+                logger.debug(f"Created tables: {tables}")
+                
+                if 'user_pantry' in tables:
+                    logger.debug("Schema initialized successfully for thread-local connection")
+                else:
+                    logger.error("user_pantry table missing after schema initialization")
+            else:
+                logger.error(f"Schema file not found: {schema_file}")
+        except Exception as e:
+            logger.error(f"Failed to initialize connection schema: {e}")
+            import traceback
+            logger.error(f"Schema init traceback: {traceback.format_exc()}")
+            raise
+    
+    def cleanup_thread_connection(self):
+        """Clean up thread-local connection (call when thread ends)"""
+        if self._is_memory_db and hasattr(self._local, 'connection'):
+            try:
+                self._local.connection.close()
+                delattr(self._local, 'connection')
+                logger.debug("Thread-local database connection cleaned up")
+            except Exception as e:
+                logger.warning(f"Error cleaning up thread connection: {e}")
+
     @contextmanager
     def get_connection(self):
         """Context manager for database connections with proper cleanup"""
-        if self._persistent_conn:
-            # Use persistent connection for in-memory databases
+        if self._is_memory_db:
+            # Use thread-local connection for in-memory databases
+            conn = self._get_thread_connection()
             try:
-                yield self._persistent_conn
+                # Always verify schema exists before yielding connection
+                self._ensure_schema_for_connection(conn)
+                yield conn
             except Exception as e:
-                self._persistent_conn.rollback()
+                conn.rollback()
                 logger.error(f"Database error: {e}")
                 raise
         else:
@@ -75,27 +171,30 @@ class DatabaseService:
                 if conn:
                     conn.close()
     
+    def _ensure_schema_for_connection(self, conn):
+        """Ensure schema exists for a connection"""
+        try:
+            cursor = conn.cursor()
+            # Quick check for user_pantry table
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_pantry'")
+            if not cursor.fetchone():
+                logger.warning("user_pantry table missing, initializing schema...")
+                self._initialize_connection_schema(conn)
+        except Exception as e:
+            logger.error(f"Error ensuring schema: {e}")
+            self._initialize_connection_schema(conn)
+    
     def initialize_database(self):
         """Initialize database with schema from SQL file"""
         try:
-            with self.get_connection() as conn:
-                # Load and execute schema
-                schema_file = Path(self.schema_path)
-                if schema_file.exists():
-                    with open(schema_file, 'r', encoding='utf-8') as f:
-                        schema_sql = f.read()
-                    
-                    # Execute schema in chunks (split by ; and filter empty)
-                    statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip()]
-                    
-                    for statement in statements:
-                        conn.execute(statement)
-                    
-                    conn.commit()
-                    logger.info("Database initialized successfully")
-                else:
-                    logger.error(f"Schema file not found: {schema_file}")
-                    raise FileNotFoundError(f"Database schema file not found: {schema_file}")
+            if self._is_memory_db:
+                # For in-memory databases, schema will be initialized per thread
+                logger.info("In-memory database - schema will be initialized per thread")
+            else:
+                # For file databases, initialize normally
+                with self.get_connection() as conn:
+                    self._initialize_connection_schema(conn)
+                logger.info(f"Database initialized successfully at {self.db_path}")
                     
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
@@ -696,6 +795,13 @@ class DatabaseService:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # Check if ingredient already exists first
+                cursor.execute("SELECT id FROM ingredients WHERE name = ?", (name,))
+                existing = cursor.fetchone()
+                if existing:
+                    logger.debug(f"Ingredient {name} already exists with ID {existing[0]}")
+                    return self.get_ingredient_by_id(existing[0])
+                
                 cursor.execute("""
                     INSERT INTO ingredients (name, category, common_substitutes, storage_tips, nutritional_data)
                     VALUES (?, ?, ?, ?, ?)
@@ -713,8 +819,15 @@ class DatabaseService:
                 return self.get_ingredient_by_id(ingredient_id)
                 
         except Exception as e:
-            logger.error(f"Failed to create ingredient: {e}")
-            return None
+            if "UNIQUE constraint failed" in str(e):
+                # Race condition - ingredient was created by another thread
+                logger.debug(f"Ingredient {name} was created by another thread")
+                ingredients = self.search_ingredients(name)
+                exact_match = next((ing for ing in ingredients if ing.name.lower() == name.lower()), None)
+                return exact_match
+            else:
+                logger.error(f"Failed to create ingredient: {e}")
+                return None
     
     # Helper Methods
     
@@ -818,15 +931,19 @@ class DatabaseService:
         )
 
 
-# Global database service instance
+# Global database service instance with threading lock
 _database_service: Optional[DatabaseService] = None
+_service_lock = threading.Lock()
 
 
 def get_database_service(db_path: str = "pans_cookbook.db") -> DatabaseService:
-    """Get singleton database service instance"""
+    """Get singleton database service instance (thread-safe)"""
     global _database_service
     if _database_service is None:
-        _database_service = DatabaseService(db_path)
+        with _service_lock:
+            # Double-check locking pattern
+            if _database_service is None:
+                _database_service = DatabaseService(db_path)
     return _database_service
 
 
