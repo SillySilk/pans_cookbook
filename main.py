@@ -849,11 +849,92 @@ def demo_pantry_manager():
     if not user_pantry:
         st.info("👋 Welcome to your pantry! Let's set it up with some common ingredients.")
         
-        if st.button("🚀 Set Up My Pantry", type="primary"):
-            with st.spinner("Setting up your pantry with common ingredients..."):
-                added_count = pantry_service.add_common_ingredients_to_pantry(demo_user_id)
-                st.success(f"✅ Added {added_count} common ingredients to your pantry!")
-                st.rerun()
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🚀 Set Up My Pantry", type="primary"):
+                with st.spinner("Setting up your pantry with common ingredients..."):
+                    try:
+                        added_count = pantry_service.add_common_ingredients_to_pantry(demo_user_id)
+                        if added_count > 0:
+                            st.success(f"✅ Added {added_count} common ingredients to your pantry!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to add ingredients. Let's try manual setup.")
+                    except Exception as e:
+                        st.error(f"❌ Setup failed: {e}")
+                        st.info("Let's try manual setup instead...")
+        
+        with col2:
+            if st.button("🔧 Manual Setup", type="secondary"):
+                with st.spinner("Setting up pantry manually..."):
+                    try:
+                        # Manual ingredient setup with direct database calls
+                        from services import get_ingredient_service
+                        ingredient_service = get_ingredient_service(db)
+                        
+                        # Basic ingredients to add
+                        manual_ingredients = [
+                            ("Salt", "seasoning"),
+                            ("Black Pepper", "seasoning"),
+                            ("Olive Oil", "oil"),
+                            ("Butter", "dairy"),
+                            ("Garlic", "vegetable"),
+                            ("Onion", "vegetable"),
+                            ("All-Purpose Flour", "grain"),
+                            ("Sugar", "sweetener"),
+                            ("Eggs", "protein"),
+                            ("Chicken Breast", "protein")
+                        ]
+                        
+                        added_count = 0
+                        for name, category in manual_ingredients:
+                            try:
+                                # Create ingredient in database
+                                ingredient = ingredient_service.create_ingredient(name, category)
+                                if ingredient:
+                                    # Add to pantry
+                                    success = pantry_service.update_pantry_item(demo_user_id, ingredient.id, True, "plenty")
+                                    if success:
+                                        added_count += 1
+                            except Exception as ing_error:
+                                # Ingredient might already exist, try to find it
+                                try:
+                                    existing = db.search_ingredients(name)
+                                    if existing:
+                                        ingredient = existing[0]
+                                        success = pantry_service.update_pantry_item(demo_user_id, ingredient.id, True, "plenty")
+                                        if success:
+                                            added_count += 1
+                                except:
+                                    pass  # Skip this ingredient
+                        
+                        if added_count > 0:
+                            st.success(f"✅ Manually added {added_count} ingredients to your pantry!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Manual setup also failed. Let's debug this...")
+                            
+                            # Debug info
+                            st.write("**Debug Info:**")
+                            st.write(f"Database type: {type(db)}")
+                            st.write(f"Pantry service type: {type(pantry_service)}")
+                            
+                            # Try to check if ingredients table exists
+                            try:
+                                all_ingredients = db.get_all_ingredients()
+                                st.write(f"Ingredients in database: {len(all_ingredients)}")
+                                if all_ingredients:
+                                    st.write("Sample ingredients:")
+                                    for ing in all_ingredients[:3]:
+                                        st.write(f"- {ing.name} ({ing.category})")
+                            except Exception as debug_e:
+                                st.write(f"Database error: {debug_e}")
+                    
+                    except Exception as e:
+                        st.error(f"❌ Manual setup error: {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
     else:
         # Show main pantry interface
         pantry_ui.render_pantry_interface(demo_user_id)
@@ -911,19 +992,50 @@ def demo_pantry_manager():
                 suggestion = suggestions[0]  # Show top suggestion
                 st.info(f"💡 **Shopping Tip:** Buy {', '.join(suggestion.missing_ingredients)} to make **{suggestion.recipe.name}**!")
         
-        # Pantry statistics
+        # Pantry statistics and debug info
         st.markdown("---")
-        with st.expander("📊 Pantry Statistics", expanded=False):
-            available_count = len([item for item in user_pantry if item.is_available])
-            total_count = len(user_pantry)
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Available Ingredients", available_count)
-            with col2:
-                st.metric("Total in Pantry", total_count)
-            with col3:
-                st.metric("Makeable Recipes", len(makeable_recipes))
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            with st.expander("📊 Pantry Statistics", expanded=False):
+                available_count = len([item for item in user_pantry if item.is_available])
+                total_count = len(user_pantry)
+                
+                col1a, col1b, col1c = st.columns(3)
+                with col1a:
+                    st.metric("Available Ingredients", available_count)
+                with col1b:
+                    st.metric("Total in Pantry", total_count)
+                with col1c:
+                    st.metric("Makeable Recipes", len(makeable_recipes))
+        
+        with col2:
+            with st.expander("🔍 Database Debug Info", expanded=False):
+                try:
+                    # Show database ingredients
+                    all_ingredients = db.get_all_ingredients()
+                    st.write(f"**Total ingredients in database:** {len(all_ingredients)}")
+                    
+                    if all_ingredients:
+                        st.write("**Sample ingredients:**")
+                        for ing in all_ingredients[:5]:
+                            st.write(f"• {ing.name} ({ing.category}) - ID: {ing.id}")
+                    
+                    # Show pantry table structure
+                    st.write(f"**Pantry items for user {demo_user_id}:**")
+                    if user_pantry:
+                        for item in user_pantry[:5]:
+                            status = "✅ Available" if item.is_available else "❌ Not available"
+                            st.write(f"• {item.ingredient_name} - {status} ({item.quantity_estimate})")
+                    else:
+                        st.write("No pantry items found")
+                        
+                    # Button to force refresh pantry
+                    if st.button("🔄 Refresh Pantry Data", key="refresh_pantry"):
+                        st.rerun()
+                        
+                except Exception as e:
+                    st.error(f"Debug error: {e}")
 
 
 def create_sample_parsed_recipe() -> ParsedRecipe:
