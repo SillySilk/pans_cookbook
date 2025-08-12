@@ -853,7 +853,7 @@ def demo_pantry_manager():
             with st.spinner("Setting up your pantry with common ingredients..."):
                 added_count = pantry_service.add_common_ingredients_to_pantry(demo_user_id)
                 st.success(f"✅ Added {added_count} common ingredients to your pantry!")
-                st.experimental_rerun()
+                st.rerun()
     else:
         # Show main pantry interface
         pantry_ui.render_pantry_interface(demo_user_id)
