@@ -915,21 +915,82 @@ def demo_pantry_manager():
                         else:
                             st.error("❌ Manual setup also failed. Let's debug this...")
                             
-                            # Debug info
-                            st.write("**Debug Info:**")
-                            st.write(f"Database type: {type(db)}")
-                            st.write(f"Pantry service type: {type(pantry_service)}")
+                            # Detailed step-by-step debugging
+                            st.write("**Detailed Debug Process:**")
                             
-                            # Try to check if ingredients table exists
+                            # Test ingredient service
+                            try:
+                                from services import get_ingredient_service
+                                ingredient_service = get_ingredient_service(db)
+                                st.write("✅ Ingredient service created")
+                                
+                                # Try to create one ingredient
+                                test_ingredient = ingredient_service.create_ingredient("Test Salt", "seasoning")
+                                if test_ingredient:
+                                    st.write(f"✅ Test ingredient created: {test_ingredient.name} (ID: {test_ingredient.id})")
+                                    
+                                    # Try to add to pantry
+                                    success = pantry_service.update_pantry_item(demo_user_id, test_ingredient.id, True, "plenty")
+                                    if success:
+                                        st.write("✅ Test ingredient added to pantry successfully!")
+                                    else:
+                                        st.write("❌ Failed to add test ingredient to pantry")
+                                        
+                                        # Let's try a direct SQL approach
+                                        st.write("**Trying direct SQL insert:**")
+                                        try:
+                                            with db.get_connection() as conn:
+                                                cursor = conn.cursor()
+                                                cursor.execute("""
+                                                    INSERT OR REPLACE INTO user_pantry 
+                                                    (user_id, ingredient_id, is_available, quantity_estimate, last_updated)
+                                                    VALUES (?, ?, ?, ?, ?)
+                                                """, (demo_user_id, test_ingredient.id, 1, "plenty", "2024-01-01"))
+                                                conn.commit()
+                                                st.write("✅ Direct SQL insert worked!")
+                                        except Exception as sql_e:
+                                            st.write(f"❌ Direct SQL failed: {sql_e}")
+                                else:
+                                    st.write("❌ Failed to create test ingredient")
+                                    
+                            except Exception as ing_e:
+                                st.write(f"❌ Ingredient service error: {ing_e}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                            
+                            # Check database tables
+                            st.write("**Database Table Check:**")
+                            try:
+                                with db.get_connection() as conn:
+                                    cursor = conn.cursor()
+                                    
+                                    # Check if user_pantry table exists
+                                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_pantry'")
+                                    table_exists = cursor.fetchone()
+                                    if table_exists:
+                                        st.write("✅ user_pantry table exists")
+                                        
+                                        # Check table schema
+                                        cursor.execute("PRAGMA table_info(user_pantry)")
+                                        columns = cursor.fetchall()
+                                        st.write("**user_pantry columns:**")
+                                        for col in columns:
+                                            st.write(f"  - {col[1]} ({col[2]})")
+                                    else:
+                                        st.write("❌ user_pantry table does not exist!")
+                                        
+                            except Exception as table_e:
+                                st.write(f"❌ Table check error: {table_e}")
+                            
+                            # Show existing ingredients for reference
+                            st.write("**Existing Ingredients:**")
                             try:
                                 all_ingredients = db.get_all_ingredients()
-                                st.write(f"Ingredients in database: {len(all_ingredients)}")
-                                if all_ingredients:
-                                    st.write("Sample ingredients:")
-                                    for ing in all_ingredients[:3]:
-                                        st.write(f"- {ing.name} ({ing.category})")
-                            except Exception as debug_e:
-                                st.write(f"Database error: {debug_e}")
+                                st.write(f"Total: {len(all_ingredients)}")
+                                for i, ing in enumerate(all_ingredients[:5]):
+                                    st.write(f"{i+1}. {ing.name} ({ing.category}) - ID: {ing.id}")
+                            except Exception as list_e:
+                                st.write(f"❌ Error listing ingredients: {list_e}")
                     
                     except Exception as e:
                         st.error(f"❌ Manual setup error: {e}")
