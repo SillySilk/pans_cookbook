@@ -117,7 +117,7 @@ class PantryService:
                 
                 # Check if pantry item exists
                 cursor.execute("""
-                    SELECT id FROM user_pantry 
+                    SELECT user_id FROM user_pantry 
                     WHERE user_id = ? AND ingredient_id = ?
                 """, (user_id, ingredient_id))
                 
@@ -142,7 +142,9 @@ class PantryService:
                 return True
                 
         except Exception as e:
-            logger.error(f"Failed to update pantry item: {e}")
+            logger.error(f"Failed to update pantry item {ingredient_id} for user {user_id}: {e}")
+            import traceback
+            logger.error(f"Pantry update traceback: {traceback.format_exc()}")
             return False
     
     def add_common_ingredients_to_pantry(self, user_id: int, categories: List[str] = None) -> int:
