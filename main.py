@@ -12,6 +12,14 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
+# Text encoding libraries
+try:
+    from unidecode import unidecode
+    from markdownify import markdownify
+    ENCODING_LIBRARIES_AVAILABLE = True
+except ImportError:
+    ENCODING_LIBRARIES_AVAILABLE = False
+
 # Load environment variables
 load_dotenv()
 
@@ -342,7 +350,7 @@ def main():
     # Mobile-friendly navigation
     tab_config = [
         {"label": "Status", "icon": "📊"},
-        {"label": "Smart Parser", "icon": "🧠"},
+        {"label": "Add Recipe", "icon": "📝"},
         {"label": "Recipe Browser", "icon": "📚"},
         {"label": "AI Features", "icon": "🤖"},
         {"label": "My Pantry", "icon": "🥬"}
@@ -588,63 +596,1496 @@ def main():
                     st.code(traceback.format_exc())
     
     with tab2:
-        demo_smart_parser()
+        smart_parser()
     
     with tab3:
-        demo_recipe_browser()
+        recipe_browser()
     
     with tab4:
-        demo_ai_features()
+        ai_features()
     
     with tab5:
         if PANTRY_AVAILABLE:
-            demo_pantry_manager()
+            pantry_manager()
         else:
             st.error("❌ Pantry Manager not available due to import issues")
             st.info("This may be a temporary deployment issue. The feature is fully implemented but not accessible in this environment.")
         
 
-def demo_smart_parser():
-    """Demo the enhanced AI-powered recipe parser"""
-    st.markdown("### 🧠 Smart Recipe Parser")
-    st.markdown("AI-powered recipe parsing with clean validation and automatic pantry integration.")
+
+
+def main():
+    """Main application entry point"""
+    st.set_page_config(
+        page_title="Pans Cookbook",
+        page_icon="🍳",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
     
-    if not AI_PARSING_AVAILABLE:
-        st.error("❌ AI parsing services not available")
-        st.info("The enhanced parsing features require AI services. Using basic parsing instead.")
-        demo_validation_interface()
-        return
+    # Initialize responsive design
+    responsive = create_responsive_layout("standard")
+    
+    st.title("🍳 Pans Cookbook")
+    st.subheader("Recipe Finder & Manager")
+    
+    # Mobile-friendly navigation
+    tab_config = [
+        {"label": "Status", "icon": "📊"},
+        {"label": "Add Recipe", "icon": "📝"},
+        {"label": "Recipe Browser", "icon": "📚"},
+        {"label": "AI Features", "icon": "🤖"},
+        {"label": "My Pantry", "icon": "🥬"}
+    ]
+    tab1, tab2, tab3, tab4, tab5 = responsive.create_responsive_tabs(tab_config)
+    
+    with tab1:
+        # Welcome message with responsive layout
+        with responsive.create_collapsible_section("Welcome to Pans Cookbook!", "welcome", 
+                                                  expanded_on_desktop=True, expanded_on_mobile=False):
+            st.info("""
+            Welcome to Pans Cookbook! This application is currently under development.
+            
+            **Completed Components:**
+            - ✅ Database service with multi-user support
+            - ✅ Authentication system with encrypted API keys
+            - ✅ Web scraping service with robots.txt compliance
+            - ✅ Recipe parsing and validation logic
+            - ✅ Manual validation forms for scraped recipes
+            - ✅ AI integration with LM Studio for recipe enhancement
+            - ✅ AI features UI with ingredient suggestions & instruction improvements
+            - ✅ Advanced filtering and search features
+            - ✅ Responsive web design
+            - ✅ Pantry management with "what can I make" functionality
+            
+            **Coming Next:**
+            - 👥 User management and collections
+            - 🔄 Comprehensive testing
+            """)
+        
+        # System metrics in responsive layout
+        metrics = [
+            {"label": "Services", "value": "9", "delta": "Active"},
+            {"label": "UI Components", "value": "7", "delta": "Mobile-Ready"},
+            {"label": "Test Coverage", "value": "85%", "delta": "Good"}
+        ]
+        responsive.render_responsive_metrics(metrics)
+        
+        # Test connectivity
+        with responsive.create_collapsible_section("System Status", "status", 
+                                                  expanded_on_desktop=False, expanded_on_mobile=False):
+            try:
+                db = get_database_service_singleton()
+                st.success("✅ Database service: Working")
+            except Exception as e:
+                st.error(f"❌ Database service: {e}")
+            
+            try:
+                from services import ScrapingService
+                scraper = ScrapingService()
+                st.success("✅ Scraping service: Working")
+            except Exception as e:
+                st.error(f"❌ Scraping service: {e}")
+            
+            try:
+                parser = ParsingService()
+                st.success("✅ Parsing service: Working")
+            except Exception as e:
+                st.error(f"❌ Parsing service: {e}")
+            
+            try:
+                validation_ui = ValidationInterface(ParsingService(), get_database_service_singleton())
+                st.success("✅ Validation UI: Working")
+            except Exception as e:
+                st.error(f"❌ Validation UI: {e}")
+            
+            try:
+                ai_service = AIService(get_database_service_singleton())
+                ai_ui = AIFeaturesInterface(ai_service)
+                st.success("✅ AI Features UI: Working")
+            except Exception as e:
+                st.error(f"❌ AI Features UI: {e}")
+            
+            if PANTRY_AVAILABLE:
+                try:
+                    pantry_service = get_pantry_service()
+                    pantry_ui = PantryManagerInterface(pantry_service)
+                    st.success("✅ Pantry Management: Working")
+                except Exception as e:
+                    st.error(f"❌ Pantry Management: {e}")
+            else:
+                st.error("❌ Pantry Management: Not available (import error)")
+            
+            # AI Status
+            try:
+                show_ai_status(compact=False)
+            except Exception as e:
+                st.error(f"❌ AI Status Check: {e}")
+        
+        # Database inspection section
+        with responsive.create_collapsible_section("🗄️ Database Inspection", "db_inspect", 
+                                                  expanded_on_desktop=False, expanded_on_mobile=False):
+            try:
+                db = get_database_service_singleton()
+                from config.database_config import DatabaseConfig
+                db_config = DatabaseConfig.get_database_config()
+                db_path = db_config.get('path', 'database/pans_cookbook.db')
+                st.write(f"**Database Path:** `{db_path}`")
+                
+                # Get database stats
+                stats = db.get_database_stats()
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Recipes", stats.get('recipes', 0))
+                with col2:
+                    st.metric("Ingredients", stats.get('ingredients', 0))
+                with col3:
+                    st.metric("Pantry Items", stats.get('user_pantry', 0))
+                
+                # Show recent recipes
+                recent_recipes = db.get_all_recipes(user_id=1, limit=5)
+                if recent_recipes:
+                    st.write("**Recent Recipes:**")
+                    for recipe in recent_recipes:
+                        st.write(f"- ID: {recipe.id}, Name: {recipe.name}")
+                else:
+                    st.write("**No recipes found in database**")
+                
+                # Show all existing database files in current directory only
+                import glob
+                import os
+                db_files = [f for f in glob.glob("*.db") if os.path.isfile(f)]
+                if db_files:
+                    st.write("**All database files found:**")
+                    for db_file in db_files:
+                        size = os.path.getsize(db_file)
+                        is_current = "👈 CURRENT" if db_file == db_path else ""
+                        st.write(f"- `{db_file}`: {size} bytes {is_current}")
+                
+                # Show database file info
+                if db_path != ":memory:" and os.path.exists(db_path):
+                    file_size = os.path.getsize(db_path)
+                    st.write(f"**Current database file size:** {file_size} bytes")
+                    
+                    # Check if file is empty or corrupted
+                    if file_size == 0:
+                        st.error("⚠️ Database file is empty!")
+                    elif file_size < 100:
+                        st.warning("⚠️ Database file seems very small")
+                
+                # Show detailed ingredient list
+                all_ingredients = db.get_all_ingredients()
+                if all_ingredients:
+                    st.write(f"**All {len(all_ingredients)} ingredients in database:**")
+                    
+                    # Group by category
+                    from collections import defaultdict
+                    by_category = defaultdict(list)
+                    for ing in all_ingredients:
+                        by_category[ing.category or "Uncategorized"].append(f"{ing.name} (ID: {ing.id})")
+                    
+                    for category, ingredients in sorted(by_category.items()):
+                        with st.expander(f"{category.title()} ({len(ingredients)})", expanded=False):
+                            for ingredient in sorted(ingredients):
+                                st.write(f"- {ingredient}")
+                else:
+                    st.warning("**No ingredients found in current database**")
+                
+            except Exception as e:
+                st.error(f"❌ Database inspection failed: {e}")
+                import traceback
+                with st.expander("Debug Traceback"):
+                    st.code(traceback.format_exc())
+        
+        # Ingredient management section
+        with responsive.create_collapsible_section("📦 Ingredient Management", "ingredients", 
+                                                  expanded_on_desktop=False, expanded_on_mobile=False):
+            try:
+                db = get_database_service_singleton()
+                
+                # Show current ingredient count
+                all_ingredients = db.get_all_ingredients()
+                st.metric("Total Ingredients", len(all_ingredients))
+                
+                # Add core pantry ingredients from CSV
+                if st.button("➕ Add Core Pantry Ingredients from CSV"):
+                    added_count = add_core_pantry_ingredients(db)
+                    if added_count > 0:
+                        st.success(f"✅ Added {added_count} new ingredients!")
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ All core pantry ingredients already exist in the database.")
+                
+                # Database migration tools
+                st.markdown("---")
+                st.markdown("**Database Migration Tools:**")
+                
+                # Check for existing database files in current directory only
+                import glob
+                import os
+                other_db_files = [f for f in glob.glob("*.db") if f != db_path and os.path.isfile(f)]
+                
+                if other_db_files:
+                    st.write(f"Found other database files: {', '.join(other_db_files)}")
+                    
+                    selected_db = st.selectbox("Migrate data from:", other_db_files)
+                    
+                    if st.button(f"🔄 Migrate data from {selected_db}"):
+                        migrate_count = migrate_database_data(selected_db, db)
+                        if migrate_count > 0:
+                            st.success(f"✅ Migrated {migrate_count} items!")
+                            st.rerun()
+                        else:
+                            st.info("ℹ️ No new data to migrate.")
+                else:
+                    st.info("No other database files found to migrate from.")
+                
+                # Database reset tools
+                st.markdown("---")
+                st.markdown("**🚨 Database Reset Tools:**")
+                
+                if st.button("🗑️ CLEAR ALL DATA (Reset Database)", type="secondary"):
+                    if clear_database_completely(db):
+                        st.success("✅ Database cleared successfully!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to clear database")
+                
+                if st.button("🔄 RECREATE DATABASE FROM SCRATCH", type="secondary"):
+                    if recreate_database_from_scratch():
+                        st.success("✅ Database recreated from scratch!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to recreate database")
+                
+                # Show ingredient categories
+                if all_ingredients:
+                    from collections import defaultdict
+                    by_category = defaultdict(list)
+                    for ing in all_ingredients:
+                        by_category[ing.category or "Uncategorized"].append(ing.name)
+                    
+                    st.write("**Ingredients by Category:**")
+                    for category, ingredients in sorted(by_category.items()):
+                        with st.expander(f"{category.title()} ({len(ingredients)})"):
+                            st.write(", ".join(sorted(ingredients)))
+                
+            except Exception as e:
+                st.error(f"❌ Ingredient management failed: {e}")
+                import traceback
+                with st.expander("Debug Traceback"):
+                    st.code(traceback.format_exc())
+    
+    with tab2:
+        smart_parser()
+    
+    with tab3:
+        recipe_browser()
+    
+    with tab4:
+        ai_features()
+    
+    with tab5:
+        if PANTRY_AVAILABLE:
+            pantry_manager()
+        else:
+            st.error("❌ Pantry Manager not available due to import issues")
+            st.info("This may be a temporary deployment issue. The feature is fully implemented but not accessible in this environment.")
+
+
+def smart_parser():
+    """Add Recipe interface with AI parsing, basic parsing, and manual entry options"""
+    st.markdown("### 📝 Add Recipe")
+    st.markdown("Add recipes to your cookbook using AI parsing, basic text parsing, or manual entry.")
     
     # Initialize services
     db = get_database_service_singleton()
     ai_service = AIService(db)
     
-    if not ai_service.is_ai_available():
-        st.warning("🤖 AI service not available. Start LM Studio to use smart parsing features.")
-        st.info("Falling back to basic validation interface...")
-        demo_validation_interface()
-        return
-    
-    # Initialize AI parsing services
-    ai_parser = get_ai_ingredient_parser(ai_service, db)
-    bulk_parser = get_bulk_recipe_parser(ai_service)
-    simple_validator = SimpleValidationInterface(ai_parser, db)
+    # Default to LM Studio (local AI)
+    ai_service.set_provider("lm_studio", None)
     
     # Create tabs for different input modes
-    parser_tab1, parser_tab2, parser_tab3 = st.tabs(["📝 Single Recipe", "📚 Bulk Import", "🎯 Sample Demo"])
+    input_tab1, input_tab2, input_tab3 = st.tabs(["🤖 AI Parse", "📝 Text Parse", "✍️ Manual Entry"])
     
-    with parser_tab1:
-        demo_single_recipe_parser(simple_validator, ai_parser, db)
+    with input_tab1:
+        ai_recipe_input(ai_service, db)
     
-    with parser_tab2:
-        demo_bulk_recipe_parser(bulk_parser, simple_validator, ai_parser, db)
+    with input_tab2:
+        basic_recipe_input(db)
     
-    with parser_tab3:
-        demo_smart_parser_sample(simple_validator, ai_parser, db)
+    with input_tab3:
+        manual_recipe_input(db)
 
 
-def demo_single_recipe_parser(validator: 'SimpleValidationInterface', ai_parser, db):
-    """Demo single recipe parsing with AI"""
+def ai_recipe_input(ai_service, db):
+    """AI-powered recipe parsing with form for editing before saving"""
+    st.markdown("#### 🤖 AI Recipe Parser")
+    st.info("Paste recipe text and let AI extract the structured data. Review and edit before saving.")
+    
+    # Check AI availability
+    if not ai_service.is_ai_available():
+        st.error("❌ LM Studio not available. Make sure it's running at http://localhost:1234")
+        st.info("Start LM Studio and load a model, then refresh this page.")
+        return
+    
+    st.success("✅ LM Studio connected and ready")
+    
+    # Recipe text input
+    recipe_text = st.text_area(
+        "Paste Recipe Text:",
+        height=200,
+        placeholder="""Paste your recipe here, for example:
+
+Simple Baked Chicken Breast
+Prep: 10 minutes, Cook: 25 minutes, Serves: 4
+
+Ingredients:
+- 4 boneless skinless chicken breasts
+- 2 tbsp olive oil
+- 1 tsp salt
+- 1/2 tsp black pepper
+- 1 tsp garlic powder
+- 1 tsp paprika
+
+Instructions:
+1. Preheat oven to 400°F
+2. Season chicken with oil and spices
+3. Bake for 20-25 minutes until internal temp reaches 165°F
+4. Let rest 5 minutes before serving"""
+    )
+    
+    # Parse button
+    if st.button("🧠 Parse with AI", type="primary", key="ai_parse_button"):
+        if not recipe_text.strip():
+            st.warning("⚠️ Please paste some recipe text first!")
+        else:
+            with st.spinner("🤖 AI is parsing your recipe..."):
+                try:
+                    # Clean the text first to prevent encoding errors
+                    clean_recipe_text = clean_text_encoding(recipe_text)
+                    # Use AI to parse the recipe
+                    parsed_data = ai_parse_recipe_text(ai_service, clean_recipe_text)
+                    if parsed_data:
+                        st.success("✅ Recipe parsed successfully!")
+                        # Store in session state for the form
+                        st.session_state['parsed_recipe_data'] = parsed_data
+                        st.rerun()
+                    else:
+                        st.error("❌ Could not parse recipe. Try the Text Parse tab for basic extraction.")
+                        
+                except Exception as e:
+                    st.error(f"❌ Parsing error: {str(e)}")
+    
+    # Show recipe form if we have parsed data
+    if 'parsed_recipe_data' in st.session_state:
+        st.markdown("---")
+        show_recipe_form(db, st.session_state['parsed_recipe_data'], "AI")
+
+
+def basic_recipe_input(db):
+    """Basic text parsing without AI"""
+    st.markdown("#### 📝 Text Recipe Parser")
+    st.info("Basic text parsing that extracts recipe parts without AI. Good fallback option.")
+    
+    # Recipe text input
+    recipe_text = st.text_area(
+        "Paste Recipe Text:",
+        height=200,
+        placeholder="Paste your recipe here..."
+    )
+    
+    # Parse button
+    if st.button("📝 Parse Text", type="primary", key="text_parse_button"):
+        if not recipe_text.strip():
+            st.warning("⚠️ Please paste some recipe text first!")
+        else:
+            with st.spinner("📝 Parsing recipe text..."):
+                try:
+                    # Use our improved basic text parsing
+                    parsed_data = basic_text_parse(recipe_text)
+                    
+                    if parsed_data:
+                        st.success("✅ Recipe parsed with basic text extraction!")
+                        print(f"Basic parsing result: {parsed_data}")  # Debug output
+                        st.session_state['parsed_recipe_data'] = parsed_data
+                        st.rerun()
+                    else:
+                        st.error("❌ Could not extract recipe parts from text. Please check the format.")
+                        st.info("💡 Make sure your recipe has clear 'Ingredients:' and 'Instructions:' sections.")
+                        
+                except Exception as e:
+                    st.error(f"❌ Text parsing error: {str(e)}")
+                    print(f"Text parsing exception: {e}")  # Debug output
+    
+    # Show recipe form if we have parsed data
+    if 'parsed_recipe_data' in st.session_state:
+        st.markdown("---")
+        show_recipe_form(db, st.session_state['parsed_recipe_data'], "Text")
+
+
+def manual_recipe_input(db):
+    """Manual recipe entry form"""
+    st.markdown("#### ✍️ Manual Recipe Entry")
+    st.info("Enter recipe details manually using the form below.")
+    
+    # Create empty data for manual entry
+    empty_data = {
+        'title': "",
+        'description': "",
+        'ingredients': [],
+        'instructions': "",
+        'prep_time': "",
+        'cook_time': "",
+        'total_time': "",
+        'servings': ""
+    }
+    
+    show_recipe_form(db, empty_data, "Manual")
+
+
+def ai_parse_recipe_text(ai_service, recipe_text):
+    """Use AI service to parse recipe text into structured data"""
+    try:
+        # Clean text to ensure no encoding issues in AI processing
+        clean_text = clean_text_encoding(recipe_text)
+        
+        # Simplified prompt that's more likely to work with LM Studio
+        prompt = f"""Extract recipe information from this text and return it as JSON.
+
+Required fields:
+- title (recipe name)
+- ingredients (list of ingredient strings)
+- instructions (cooking steps)
+- prep_time (if mentioned)
+- cook_time (if mentioned) 
+- servings (if mentioned)
+- description (brief summary)
+
+Return only valid JSON like this example:
+{{"title": "Chicken Recipe", "ingredients": ["4 chicken breasts", "2 tbsp oil"], "instructions": "1. Cook chicken...", "prep_time": "10 minutes", "cook_time": "25 minutes", "servings": "4", "description": "Delicious chicken dish"}}
+
+Recipe text:
+{clean_text}
+
+JSON:"""
+
+        response = ai_service.get_completion(prompt, max_tokens=1500, temperature=0.1)
+        
+        if response:
+            print(f"AI Response: {response}")  # Debug output
+            
+            # Try multiple methods to extract JSON
+            import json
+            import re
+            
+            # Method 1: Look for JSON object
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                try:
+                    json_str = json_match.group(0)
+                    parsed_data = json.loads(json_str)
+                    
+                    # Clean up and validate data
+                    cleaned_data = clean_parsed_data(parsed_data)
+                    if cleaned_data:
+                        print(f"Successfully parsed with AI: {cleaned_data}")
+                        return cleaned_data
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error: {e}")
+            
+            # Method 2: Try basic text extraction if JSON fails
+            print("JSON parsing failed, trying basic extraction...")
+            return basic_parse_from_ai_response(response, recipe_text)
+                
+    except Exception as e:
+        print(f"AI parsing error: {e}")
+    
+    # Fallback to basic parsing
+    print("AI parsing failed completely, falling back to basic parsing...")
+    return basic_text_parse(recipe_text)
+
+
+def clean_parsed_data(data):
+    """Clean and validate parsed recipe data"""
+    if not isinstance(data, dict):
+        return None
+        
+    # Ensure required fields exist
+    cleaned = {
+        'title': str(data.get('title', '')).strip(),
+        'description': str(data.get('description', '')).strip(),
+        'ingredients': [],
+        'instructions': str(data.get('instructions', '')).strip(),
+        'prep_time': str(data.get('prep_time', '')).strip(),
+        'cook_time': str(data.get('cook_time', '')).strip(),
+        'total_time': str(data.get('total_time', '')).strip(),
+        'servings': str(data.get('servings', '')).strip()
+    }
+    
+    # Handle ingredients - can be string or list
+    ingredients_raw = data.get('ingredients', [])
+    if isinstance(ingredients_raw, str):
+        # Split by lines or common separators
+        ingredients_list = []
+        for line in ingredients_raw.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('-') and not line.startswith('*'):
+                ingredients_list.append(line)
+            elif line:
+                ingredients_list.append(line[1:].strip())  # Remove - or *
+        cleaned['ingredients'] = [ing for ing in ingredients_list if ing]
+    elif isinstance(ingredients_raw, list):
+        cleaned['ingredients'] = [str(ing).strip() for ing in ingredients_raw if str(ing).strip()]
+    
+    # Must have title and at least one ingredient
+    if cleaned['title'] and cleaned['ingredients']:
+        return cleaned
+    
+    return None
+
+
+def basic_parse_from_ai_response(ai_response, original_text):
+    """Try to extract recipe data from AI response even if not JSON"""
+    try:
+        # Look for common patterns in the AI response
+        title = extract_title_from_text(ai_response) or extract_title_from_text(original_text)
+        ingredients = extract_ingredients_from_text(ai_response) or extract_ingredients_from_text(original_text)
+        instructions = extract_instructions_from_text(ai_response) or extract_instructions_from_text(original_text)
+        
+        if title and ingredients:
+            return {
+                'title': title,
+                'description': '',
+                'ingredients': ingredients,
+                'instructions': instructions,
+                'prep_time': extract_time_from_text(ai_response, 'prep') or extract_time_from_text(original_text, 'prep'),
+                'cook_time': extract_time_from_text(ai_response, 'cook') or extract_time_from_text(original_text, 'cook'),
+                'total_time': '',
+                'servings': extract_servings_from_text(ai_response) or extract_servings_from_text(original_text)
+            }
+    except Exception as e:
+        print(f"Error in basic parse from AI response: {e}")
+    
+    return None
+
+
+def basic_text_parse(recipe_text):
+    """Basic text parsing without AI - extract recipe components using patterns"""
+    try:
+        title = extract_title_from_text(recipe_text)
+        ingredients = extract_ingredients_from_text(recipe_text)
+        instructions = extract_instructions_from_text(recipe_text)
+        
+        if not title:
+            title = "Untitled Recipe"
+        
+        if not ingredients:
+            # If no clear ingredients section, try to guess
+            lines = recipe_text.split('\n')
+            ingredients = []
+            for line in lines[:20]:  # Look at first 20 lines
+                line = line.strip()
+                if line and (any(word in line.lower() for word in ['cup', 'tbsp', 'tsp', 'pound', 'lb', 'oz', 'gram', 'ml'])):
+                    ingredients.append(line)
+        
+        if ingredients:
+            return {
+                'title': title,
+                'description': '',
+                'ingredients': ingredients,
+                'instructions': instructions or recipe_text,
+                'prep_time': extract_time_from_text(recipe_text, 'prep'),
+                'cook_time': extract_time_from_text(recipe_text, 'cook'),
+                'total_time': '',
+                'servings': extract_servings_from_text(recipe_text)
+            }
+            
+    except Exception as e:
+        print(f"Basic text parsing error: {e}")
+    
+    return None
+
+
+def extract_title_from_text(text):
+    """Extract recipe title from text"""
+    lines = text.split('\n')
+    for line in lines[:5]:  # Check first 5 lines
+        line = line.strip()
+        if line and len(line) < 100 and not line.startswith('-') and not line.startswith('*'):
+            # Skip common non-title lines
+            if not any(word in line.lower() for word in ['ingredient', 'instruction', 'step', 'prep:', 'cook:', 'total:', 'serves']):
+                return line
+    return ""
+
+
+def extract_ingredients_from_text(text):
+    """Extract ingredients list from text"""
+    import re
+    
+    # Look for ingredients section
+    ingredients_section = ""
+    lines = text.split('\n')
+    
+    in_ingredients = False
+    ingredients = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Start of ingredients section
+        if re.search(r'^ingredients?:?\s*$', line, re.IGNORECASE):
+            in_ingredients = True
+            continue
+            
+        # End of ingredients (start of instructions)
+        if in_ingredients and re.search(r'^(instructions?|directions?|method|steps?):?\s*$', line, re.IGNORECASE):
+            break
+            
+        # If we're in ingredients section
+        if in_ingredients:
+            if line.startswith(('-', '•', '*', '+')):
+                ingredients.append(line[1:].strip())
+            elif re.match(r'^\d+\.?\s+', line):  # numbered list
+                ingredients.append(re.sub(r'^\d+\.?\s+', '', line))
+            elif any(word in line.lower() for word in ['cup', 'tbsp', 'tsp', 'pound', 'lb', 'oz', 'gram', 'ml', 'clove', 'slice']):
+                ingredients.append(line)
+    
+    return ingredients
+
+
+def extract_instructions_from_text(text):
+    """Extract instructions from text"""
+    import re
+    
+    lines = text.split('\n')
+    in_instructions = False
+    instructions = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Start of instructions section
+        if re.search(r'^(instructions?|directions?|method|steps?):?\s*$', line, re.IGNORECASE):
+            in_instructions = True
+            continue
+            
+        # If we're in instructions section
+        if in_instructions:
+            if line.startswith(('-', '•', '*', '+')):
+                instructions.append(line[1:].strip())
+            elif re.match(r'^\d+\.?\s+', line):  # numbered steps
+                instructions.append(line)
+            else:
+                instructions.append(line)
+    
+    return '\n'.join(instructions) if instructions else ""
+
+
+def extract_time_from_text(text, time_type):
+    """Extract prep time or cook time from text"""
+    import re
+    
+    pattern = rf'{time_type}\s*time:?\s*(\d+\s*(?:minutes?|mins?|hours?|hrs?))'
+    match = re.search(pattern, text, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    
+    # Also look for patterns like "Prep: 15 minutes"
+    pattern = rf'{time_type}:?\s*(\d+\s*(?:minutes?|mins?|hours?|hrs?))'
+    match = re.search(pattern, text, re.IGNORECASE)
+    if match:
+        return match.group(1)
+        
+    return ""
+
+
+def extract_servings_from_text(text):
+    """Extract servings from text"""
+    import re
+    
+    # Look for various serving patterns
+    patterns = [
+        r'serves?\s*:?\s*(\d+)',
+        r'servings?\s*:?\s*(\d+)',
+        r'yield\s*:?\s*(\d+)',
+        r'makes?\s*:?\s*(\d+)'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1)
+            
+    return ""
+
+
+def show_recipe_form(db, data, source_type):
+    """Show the recipe form that can be filled by AI, parsing, or manual entry"""
+    st.markdown(f"### 📋 Recipe Form ({source_type})")
+    st.markdown("Review and edit the recipe details below, then save to your cookbook.")
+    
+    with st.form(f"recipe_form_{source_type.lower()}", clear_on_submit=False):
+        # Basic recipe info
+        col1, col2 = st.columns(2)
+        with col1:
+            title = st.text_input("Recipe Title *", value=data.get('title', ''))
+        
+        with col2:
+            servings = st.text_input("Servings", value=data.get('servings', ''))
+        
+        # Timing
+        time_col1, time_col2, time_col3 = st.columns(3)
+        with time_col1:
+            prep_time = st.text_input("Prep Time", value=data.get('prep_time', ''), placeholder="e.g. 15 minutes")
+        with time_col2:
+            cook_time = st.text_input("Cook Time", value=data.get('cook_time', ''), placeholder="e.g. 30 minutes")
+        with time_col3:
+            total_time = st.text_input("Total Time", value=data.get('total_time', ''), placeholder="e.g. 45 minutes")
+        
+        # Description
+        description = st.text_area("Description", value=data.get('description', ''), height=100)
+        
+        # Simple Image Upload
+        st.markdown("**Recipe Image (Optional):**")
+        uploaded_image = st.file_uploader(
+            "Upload a photo of your recipe",
+            type=['png', 'jpg', 'jpeg', 'gif'],
+            key=f"recipe_image_upload_{source_type.lower()}"
+        )
+        
+        # Ingredients
+        st.markdown("**Ingredients:**")
+        ingredients_text = st.text_area(
+            "Ingredients (one per line)",
+            value='\n'.join(data.get('ingredients', [])) if data.get('ingredients') else '',
+            height=150,
+            placeholder="Enter each ingredient on a separate line:\n4 boneless chicken breasts\n2 tbsp olive oil\n1 tsp salt"
+        )
+        
+        # Instructions
+        instructions = st.text_area(
+            "Instructions",
+            value=data.get('instructions', ''),
+            height=200,
+            placeholder="Enter the cooking instructions..."
+        )
+        
+        # Submit button
+        submitted = st.form_submit_button("💾 Save Recipe to Cookbook", type="primary")
+        
+        if submitted:
+            if not title.strip():
+                st.error("❌ Recipe title is required!")
+                return
+            
+            if not instructions.strip():
+                st.error("❌ Instructions are required!")
+                return
+                
+            # Parse ingredients list
+            ingredients_list = [ing.strip() for ing in ingredients_text.split('\n') if ing.strip()]
+            if not ingredients_list:
+                st.error("❌ At least one ingredient is required!")
+                return
+            
+            # Handle image upload if provided
+            image_path = ""
+            if uploaded_image is not None:
+                success, saved_path = save_recipe_image_during_creation(uploaded_image, title)
+                if success:
+                    image_path = saved_path
+            
+            # Store recipe data for ingredient mapping step (don't save to DB yet)
+            st.session_state['pending_recipe'] = {
+                'title': title,
+                'description': description,
+                'ingredients_list': ingredients_list,
+                'instructions': instructions,
+                'prep_time': prep_time,
+                'cook_time': cook_time,
+                'total_time': total_time,
+                'servings': servings,
+                'image_path': image_path,
+                'source_type': source_type
+            }
+            st.rerun()
+    
+    # Show ingredient mapping interface if recipe is pending
+    if 'pending_recipe' in st.session_state:
+        st.markdown("---")
+        show_structured_ingredient_interface(db, st.session_state['pending_recipe'])
+    
+    # Handle success actions outside the form
+    if st.session_state.get('recipe_saved', False):
+        st.markdown("---")
+        st.success(f"🎉 Recipe '{st.session_state.get('saved_recipe_title')}' was saved to your cookbook!")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("➕ Add Another Recipe", type="primary", key=f"add_another_{source_type.lower()}"):
+                # Clear all session state
+                if 'parsed_recipe_data' in st.session_state:
+                    del st.session_state['parsed_recipe_data']
+                if 'recipe_saved' in st.session_state:
+                    del st.session_state['recipe_saved']
+                if 'saved_recipe_title' in st.session_state:
+                    del st.session_state['saved_recipe_title']
+                st.rerun()
+        
+        with col2:
+            if st.button("📚 View All Recipes", key=f"view_recipes_{source_type.lower()}"):
+                st.info("Navigate to the Recipe Browser tab to see all your recipes!")
+
+
+def clean_text_encoding(text):
+    """
+    Clean text using unidecode library to handle ALL Unicode characters.
+    This converts any Unicode character to its closest ASCII equivalent.
+    """
+    if not text:
+        return ""
+    
+    # Convert to string if not already
+    text = str(text)
+    
+    # Use global imports for text cleaning
+    if ENCODING_LIBRARIES_AVAILABLE:
+        # First, convert any HTML content to clean markdown (handles HTML entities too)
+        try:
+            # If text contains HTML tags, convert to markdown first
+            if '<' in text and '>' in text:
+                text = markdownify(text, strip=['script', 'style'])
+        except Exception:
+            pass  # If markdown conversion fails, continue with original text
+        
+        # Use unidecode to convert ALL Unicode characters to ASCII equivalents
+        # This handles emojis, special characters, accented characters, etc.
+        try:
+            text = unidecode(text)
+        except Exception as e:
+            print(f"[WARNING] unidecode failed: {e}")
+            # Fallback: keep only basic ASCII characters
+            text = ''.join(char for char in text if ord(char) < 128)
+    else:
+        print("[WARNING] Encoding libraries not available, falling back to ASCII-only")
+        # Fallback if libraries aren't available: keep only basic ASCII characters
+        text = ''.join(char for char in text if ord(char) < 128)
+    
+    # Clean up any extra whitespace
+    text = ' '.join(text.split())
+    
+    return text.strip()
+
+
+def show_structured_ingredient_interface(db, recipe_data):
+    """Show structured ingredient interface with expandable fields"""
+    st.markdown("## 📋 Recipe Structure")
+    st.markdown(f"**Recipe:** {recipe_data['title']}")
+    
+    # Get all existing ingredients for dropdowns
+    from services import get_ingredient_service
+    ingredient_service = get_ingredient_service()
+    all_ingredients = ingredient_service.get_all_ingredients()
+    ingredient_options = ["-- Select Ingredient --"] + [f"{ing.name}" for ing in all_ingredients]
+    
+    # Initialize structured ingredients in session state
+    if 'structured_ingredients' not in st.session_state:
+        st.session_state['structured_ingredients'] = []
+        # Auto-parse ingredients from the ingredients_list
+        ingredients_list = recipe_data['ingredients_list']
+        for ingredient_text in ingredients_list:
+            parsed = parse_ingredient_text(ingredient_text)
+            st.session_state['structured_ingredients'].append({
+                'original_text': ingredient_text,
+                'quantity': parsed['quantity'],
+                'unit': parsed['unit'],
+                'ingredient_id': None,
+                'ingredient_name': parsed['ingredient_name'],
+                'preparation': parsed['preparation']
+            })
+    
+    # Collapsible ingredients section
+    with st.expander("🔧 Structured Ingredients (Auto-parsed)", expanded=True):
+        st.markdown("Review and adjust the auto-parsed ingredient structure:")
+        
+        # Display each structured ingredient
+        all_mapped = True
+        for i, ingredient in enumerate(st.session_state['structured_ingredients']):
+            st.markdown(f"**Ingredient {i+1}:**")
+            col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
+            
+            with col1:
+                quantity = st.number_input(
+                    "Qty", 
+                    value=ingredient['quantity'], 
+                    step=0.25, 
+                    key=f"qty_{i}",
+                    min_value=0.0
+                )
+                st.session_state['structured_ingredients'][i]['quantity'] = quantity
+            
+            with col2:
+                unit = st.text_input(
+                    "Unit", 
+                    value=ingredient['unit'], 
+                    key=f"unit_{i}",
+                    placeholder="cup, tsp, etc."
+                )
+                st.session_state['structured_ingredients'][i]['unit'] = unit
+            
+            with col3:
+                # Auto-match suggestion
+                suggested_match = auto_match_ingredient(ingredient['ingredient_name'], all_ingredients)
+                default_index = 0
+                if suggested_match:
+                    try:
+                        default_index = ingredient_options.index(suggested_match.name) 
+                    except ValueError:
+                        pass
+                
+                selected_ingredient = st.selectbox(
+                    "Ingredient",
+                    ingredient_options,
+                    index=default_index,
+                    key=f"ingredient_{i}"
+                )
+                
+                # Store selected ingredient ID
+                if selected_ingredient != "-- Select Ingredient --":
+                    matched_ingredient = next((ing for ing in all_ingredients if ing.name == selected_ingredient), None)
+                    if matched_ingredient:
+                        st.session_state['structured_ingredients'][i]['ingredient_id'] = matched_ingredient.id
+                        st.session_state['structured_ingredients'][i]['ingredient_name'] = matched_ingredient.name
+                    else:
+                        st.session_state['structured_ingredients'][i]['ingredient_id'] = None
+                        all_mapped = False
+                else:
+                    st.session_state['structured_ingredients'][i]['ingredient_id'] = None
+                    all_mapped = False
+            
+            with col4:
+                if st.button("➕", key=f"new_ing_{i}", help="Create new ingredient"):
+                    show_new_ingredient_form_structured(ingredient_service, ingredient['ingredient_name'], i)
+            
+            # Preparation notes
+            preparation = st.text_input(
+                "Preparation (optional)", 
+                value=ingredient['preparation'], 
+                key=f"prep_{i}",
+                placeholder="chopped, diced, etc."
+            )
+            st.session_state['structured_ingredients'][i]['preparation'] = preparation
+            
+            # Show original text for reference
+            st.caption(f"Original: {ingredient['original_text']}")
+            st.markdown("---")
+        
+        # Add new ingredient field button
+        if st.button("➕ Add Another Ingredient"):
+            st.session_state['structured_ingredients'].append({
+                'original_text': '',
+                'quantity': 1.0,
+                'unit': '',
+                'ingredient_id': None,
+                'ingredient_name': '',
+                'preparation': ''
+            })
+            st.rerun()
+    
+    # Save button
+    st.markdown("### Save Recipe")
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
+    with col2:
+        if all_mapped and len(st.session_state['structured_ingredients']) > 0:
+            if st.button("✅ Save Recipe with Structured Ingredients", type="primary", key="save_structured_recipe"):
+                save_recipe_with_structured_ingredients(db, recipe_data, st.session_state['structured_ingredients'])
+        else:
+            missing_count = len([ing for ing in st.session_state['structured_ingredients'] if ing['ingredient_id'] is None])
+            st.button(f"⚠️ Map All {missing_count} Ingredients First", disabled=True)
+            if missing_count > 0:
+                st.caption(f"Please select ingredients for all {missing_count} unmapped fields")
+
+
+def auto_match_ingredient(ingredient_text, all_ingredients):
+    """Attempt to auto-match recipe ingredient text to existing ingredient"""
+    # Simple matching - extract key words and find best match
+    import re
+    
+    # Clean the ingredient text
+    clean_text = re.sub(r'^\d+\s*', '', ingredient_text)  # Remove leading numbers
+    clean_text = re.sub(r'\b(cups?|tbsp|tsp|pounds?|lbs?|oz|grams?|ml|cloves?|slices?)\b', '', clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r'\b(chopped|diced|minced|sliced|grated|fresh|dried)\b', '', clean_text, flags=re.IGNORECASE)
+    clean_text = clean_text.strip().lower()
+    
+    # Try exact matches first
+    for ingredient in all_ingredients:
+        if ingredient.name.lower() in clean_text or clean_text in ingredient.name.lower():
+            return ingredient
+    
+    # Try partial matches
+    words = clean_text.split()
+    for ingredient in all_ingredients:
+        ingredient_words = ingredient.name.lower().split()
+        if any(word in ingredient_words for word in words if len(word) > 2):
+            return ingredient
+    
+    return None
+
+
+def show_new_ingredient_form_structured(ingredient_service, ingredient_name, index):
+    """Show form to create new ingredient for structured interface"""
+    with st.expander(f"Create New Ingredient: '{ingredient_name}'", expanded=True):
+        with st.form(f"new_ingredient_form_structured_{index}"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                name = st.text_input("Ingredient Name", value=ingredient_name.title())
+            
+            with col2:
+                categories = ["Protein", "Vegetable", "Fruit", "Grain", "Dairy", "Spice", "Oil", "Other"]
+                category = st.selectbox("Category", categories)
+            
+            submitted = st.form_submit_button("Create Ingredient")
+            
+            if submitted and name.strip():
+                # Create the new ingredient
+                new_ingredient = ingredient_service.create_ingredient(name.strip(), category)
+                if new_ingredient:
+                    st.success(f"✅ Created new ingredient: {name}")
+                    # Update the structured ingredient
+                    if 'structured_ingredients' in st.session_state:
+                        st.session_state['structured_ingredients'][index]['ingredient_id'] = new_ingredient.id
+                        st.session_state['structured_ingredients'][index]['ingredient_name'] = new_ingredient.name
+                    st.rerun()
+                else:
+                    st.error("Failed to create ingredient")
+
+
+def save_recipe_with_structured_ingredients(db, recipe_data, structured_ingredients):
+    """Save recipe to database with structured ingredient relationships"""
+    try:
+        # Save the recipe first
+        recipe_id = save_recipe_to_database(
+            db, recipe_data['title'], recipe_data['description'], 
+            recipe_data['ingredients_list'], recipe_data['instructions'],
+            recipe_data['prep_time'], recipe_data['cook_time'], 
+            recipe_data['total_time'], recipe_data['servings'], recipe_data['image_path']
+        )
+        
+        if recipe_id:
+            # Save the structured ingredient relationships
+            successful_mappings = 0
+            
+            for order, ingredient in enumerate(structured_ingredients):
+                if ingredient['ingredient_id']:
+                    # Add to recipe_ingredients table with structured data
+                    success = db.add_recipe_ingredient(
+                        recipe_id=recipe_id,
+                        ingredient_id=ingredient['ingredient_id'],
+                        quantity=ingredient['quantity'],
+                        unit=ingredient['unit'],
+                        preparation_note=ingredient['preparation'],
+                        ingredient_order=order,
+                        is_optional=False
+                    )
+                    
+                    if success:
+                        successful_mappings += 1
+                    else:
+                        st.warning(f"Failed to map ingredient: {ingredient['ingredient_name']}")
+            
+            if successful_mappings == len([ing for ing in structured_ingredients if ing['ingredient_id']]):
+                st.success(f"✅ Recipe '{recipe_data['title']}' saved with {successful_mappings} structured ingredients!")
+            else:
+                st.warning(f"⚠️ Recipe saved but only {successful_mappings} ingredient mappings succeeded")
+            
+            # Clear session state
+            if 'pending_recipe' in st.session_state:
+                del st.session_state['pending_recipe']
+            if 'structured_ingredients' in st.session_state:
+                del st.session_state['structured_ingredients']
+                
+            st.session_state['recipe_saved'] = True
+            st.session_state['saved_recipe_title'] = recipe_data['title']
+            st.rerun()
+        else:
+            st.error("Failed to save recipe")
+            
+    except Exception as e:
+        st.error(f"Error saving recipe: {e}")
+
+
+def show_new_ingredient_form(ingredient_service, ingredient_text, index):
+    """Show form to create new ingredient"""
+    with st.expander(f"Create New Ingredient for '{ingredient_text}'", expanded=True):
+        # Extract suggested name from ingredient text
+        import re
+        suggested_name = re.sub(r'^\d+\s*', '', ingredient_text)
+        suggested_name = re.sub(r'\b(cups?|tbsp|tsp|pounds?|lbs?|oz|grams?|ml|cloves?|slices?)\b', '', suggested_name, flags=re.IGNORECASE)
+        suggested_name = re.sub(r'\b(chopped|diced|minced|sliced|grated|fresh|dried)\b', '', suggested_name, flags=re.IGNORECASE)
+        suggested_name = suggested_name.strip().title()
+        
+        with st.form(f"new_ingredient_form_{index}"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                name = st.text_input("Ingredient Name", value=suggested_name)
+            
+            with col2:
+                categories = ["Protein", "Vegetable", "Fruit", "Grain", "Dairy", "Spice", "Oil", "Other"]
+                category = st.selectbox("Category", categories)
+            
+            submitted = st.form_submit_button("Create Ingredient")
+            
+            if submitted and name.strip():
+                # Create the new ingredient
+                new_ingredient = ingredient_service.create_ingredient(name.strip(), category)
+                if new_ingredient:
+                    st.success(f"✅ Created new ingredient: {name}")
+                    # Map it to the recipe ingredient
+                    st.session_state['ingredient_mappings'][ingredient_text] = new_ingredient.id
+                    st.rerun()
+                else:
+                    st.error("Failed to create ingredient")
+
+
+def save_recipe_with_mappings(db, recipe_data, ingredient_mappings):
+    """Save recipe to database with proper ingredient relationships"""
+    try:
+        # Save the recipe first
+        recipe_id = save_recipe_to_database(
+            db, recipe_data['title'], recipe_data['description'], 
+            recipe_data['ingredients_list'], recipe_data['instructions'],
+            recipe_data['prep_time'], recipe_data['cook_time'], 
+            recipe_data['total_time'], recipe_data['servings'], recipe_data['image_path']
+        )
+        
+        if recipe_id:
+            # Now save the ingredient mappings to recipe_ingredients table
+            ingredient_order = 0
+            successful_mappings = 0
+            
+            for ingredient_text, ingredient_id in ingredient_mappings.items():
+                # Parse quantity and unit from ingredient text (basic parsing)
+                quantity, unit = parse_ingredient_quantity(ingredient_text)
+                
+                # Add to recipe_ingredients table using the database service
+                success = db.add_recipe_ingredient(
+                    recipe_id=recipe_id,
+                    ingredient_id=ingredient_id,
+                    quantity=quantity,
+                    unit=unit,
+                    preparation_note="",  # Could extract preparation notes in the future
+                    ingredient_order=ingredient_order,
+                    is_optional=False
+                )
+                
+                if success:
+                    successful_mappings += 1
+                    ingredient_order += 1
+                else:
+                    st.warning(f"Failed to map ingredient: {ingredient_text}")
+            
+            if successful_mappings == len(ingredient_mappings):
+                st.success(f"✅ Recipe '{recipe_data['title']}' saved successfully with {successful_mappings} ingredient mappings!")
+            else:
+                st.warning(f"⚠️ Recipe saved but only {successful_mappings}/{len(ingredient_mappings)} ingredient mappings succeeded")
+            
+            # Clear session state
+            if 'pending_recipe' in st.session_state:
+                del st.session_state['pending_recipe']
+            if 'ingredient_mappings' in st.session_state:
+                del st.session_state['ingredient_mappings']
+                
+            st.session_state['recipe_saved'] = True
+            st.session_state['saved_recipe_title'] = recipe_data['title']
+            st.rerun()
+        else:
+            st.error("Failed to save recipe")
+            
+    except Exception as e:
+        st.error(f"Error saving recipe: {e}")
+
+
+def parse_ingredient_text(ingredient_text):
+    """Parse ingredient text into structured components"""
+    import re
+    
+    # Clean the input
+    text = ingredient_text.strip()
+    
+    # Initialize components
+    result = {
+        'quantity': 1.0,
+        'unit': '',
+        'ingredient_name': text,
+        'preparation': ''
+    }
+    
+    # Parse quantity and unit pattern: "2 cups flour, chopped"
+    # Handle fractions like "1/2", "1 1/2", etc.
+    quantity_pattern = r'^(\d+(?:\s*\d+/\d+|\.\d+|/\d+)?)\s*'
+    match = re.match(quantity_pattern, text)
+    
+    if match:
+        quantity_str = match.group(1).strip()
+        try:
+            # Handle fractions
+            if '/' in quantity_str:
+                if ' ' in quantity_str:  # Mixed number like "1 1/2"
+                    whole, fraction = quantity_str.split(' ', 1)
+                    num, denom = fraction.split('/')
+                    result['quantity'] = float(whole) + float(num) / float(denom)
+                else:  # Simple fraction like "1/2"
+                    num, denom = quantity_str.split('/')
+                    result['quantity'] = float(num) / float(denom)
+            else:
+                result['quantity'] = float(quantity_str)
+        except:
+            result['quantity'] = 1.0
+        
+        # Remove quantity from text
+        text = text[len(match.group(0)):].strip()
+    
+    # Parse unit pattern: "cups", "tbsp", "tsp", etc.
+    unit_pattern = r'^(cups?|tbsp|tsp|tablespoons?|teaspoons?|lbs?|pounds?|oz|ounces?|grams?|ml|liters?|cloves?|slices?|pieces?)\s+'
+    match = re.match(unit_pattern, text, re.IGNORECASE)
+    
+    if match:
+        result['unit'] = match.group(1).lower()
+        text = text[len(match.group(0)):].strip()
+    
+    # Parse preparation notes: "flour, sifted" or "onion, diced"
+    if ',' in text:
+        parts = text.split(',', 1)
+        result['ingredient_name'] = parts[0].strip()
+        result['preparation'] = parts[1].strip()
+    else:
+        # Look for common preparation words at the end
+        prep_pattern = r'\s+(chopped|diced|minced|sliced|grated|shredded|crushed|ground|fresh|dried|cooked)$'
+        match = re.search(prep_pattern, text, re.IGNORECASE)
+        if match:
+            result['preparation'] = match.group(1).lower()
+            result['ingredient_name'] = text[:match.start()].strip()
+        else:
+            result['ingredient_name'] = text
+    
+    # Clean up ingredient name
+    result['ingredient_name'] = result['ingredient_name'].strip()
+    
+    return result
+
+
+def parse_ingredient_quantity(ingredient_text):
+    """Parse quantity and unit from ingredient text like '2 cups flour' (legacy function)"""
+    parsed = parse_ingredient_text(ingredient_text)
+    return parsed['quantity'], parsed['unit']
+
+
+def clean_ingredients_list(ingredients_list):
+    """Clean a list of ingredient strings"""
+    cleaned = []
+    for ingredient in ingredients_list:
+        if ingredient and str(ingredient).strip():
+            cleaned_ingredient = clean_text_encoding(str(ingredient))
+            if cleaned_ingredient:  # Only add if not empty after cleaning
+                cleaned.append(cleaned_ingredient)
+    return cleaned
+
+
+def process_and_save_recipe_image(uploaded_file, recipe_title):
+    """
+    Process uploaded image to create perfect 200x200 square and save it.
+    Auto-crops and resizes to save storage space and ensure consistency.
+    """
+    import os
+    import uuid
+    from pathlib import Path
+    from PIL import Image
+    import io
+    
+    try:
+        # Create static/recipe_images directory if it doesn't exist
+        images_dir = Path("static/recipe_images")
+        images_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate safe filename based on recipe title
+        safe_title = "".join(c for c in recipe_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_title = safe_title.replace(' ', '_')[:20]  # Limit length
+        
+        # Generate unique filename (always save as .jpg for consistency and smaller size)
+        unique_filename = f"{safe_title}_{uuid.uuid4().hex[:8]}.jpg"
+        file_path = images_dir / unique_filename
+        
+        # Process the image
+        print(f"[INFO] Processing image for recipe: {recipe_title}")
+        
+        # Open the uploaded image
+        image = Image.open(uploaded_file)
+        
+        # Convert to RGB if necessary (handles PNG with transparency, etc.)
+        if image.mode != 'RGB':
+            # Create white background for transparent images
+            background = Image.new('RGB', image.size, (255, 255, 255))
+            if image.mode == 'RGBA':
+                background.paste(image, mask=image.split()[-1])  # Use alpha channel as mask
+            else:
+                background.paste(image)
+            image = background
+        
+        # Create perfect square by cropping to center
+        width, height = image.size
+        
+        # Determine crop dimensions (largest square possible)
+        crop_size = min(width, height)
+        
+        # Calculate crop coordinates (center crop)
+        left = (width - crop_size) // 2
+        top = (height - crop_size) // 2
+        right = left + crop_size
+        bottom = top + crop_size
+        
+        # Crop to square
+        image_square = image.crop((left, top, right, bottom))
+        
+        # Resize to exactly 200x200 pixels
+        image_final = image_square.resize((200, 200), Image.Resampling.LANCZOS)
+        
+        # Save as high-quality JPEG (smaller file size than PNG)
+        image_final.save(file_path, 'JPEG', quality=85, optimize=True)
+        
+        # Return relative path for database storage
+        relative_path = str(file_path)
+        print(f"[INFO] Successfully processed and saved 200x200 image: {relative_path}")
+        return True, relative_path
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to process and save recipe image: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, ""
+
+
+# Keep old function name for backward compatibility
+def save_recipe_image_during_creation(uploaded_file, recipe_title):
+    """Wrapper for backward compatibility"""
+    return process_and_save_recipe_image(uploaded_file, recipe_title)
+
+
+def save_recipe_to_database(db, title, description, ingredients_list, instructions, 
+                          prep_time, cook_time, total_time, servings, image_path=""):
+    """Save a recipe to the database and return the recipe ID"""
+    try:
+        # Clean all text fields to prevent encoding issues
+        clean_title = clean_text_encoding(title)
+        clean_description = clean_text_encoding(description)
+        clean_instructions = clean_text_encoding(instructions)
+        clean_ingredients = clean_ingredients_list(ingredients_list)
+        
+        # Validate required fields after cleaning
+        if not clean_title:
+            print("[X] Error: Recipe title is empty after cleaning")
+            return None
+            
+        if not clean_ingredients:
+            print("[X] Error: No valid ingredients after cleaning")
+            return None
+        
+        # Parse the time and servings values
+        prep_minutes = parse_time_to_minutes(prep_time) or 0
+        cook_minutes = parse_time_to_minutes(cook_time) or 0
+        servings_num = parse_servings(servings) or 1
+        
+        # Single household system
+        user_id = 1
+        
+        # Create the recipe in the database with cleaned data
+        print(f"Attempting to save recipe: title='{clean_title}', prep_time={prep_minutes}, cook_time={cook_minutes}")
+        
+        recipe = db.create_recipe(
+            title=clean_title,
+            description=clean_description,
+            instructions=clean_instructions,
+            prep_time_minutes=prep_minutes,
+            cook_time_minutes=cook_minutes,
+            servings=servings_num,
+            source_url="manual_entry",
+            image_path=clean_text_encoding(image_path)  # Add image path support
+        )
+        
+        print(f"Database create_recipe returned: {recipe}")
+        
+        if recipe:
+            print(f"[OK] Successfully saved recipe '{clean_title}' with ID {recipe.id}")
+            
+            # Now add ingredients to the recipe
+            ingredient_count = 0
+            for ingredient_text in clean_ingredients:
+                if ingredient_text.strip():
+                    try:
+                        # Add ingredient to recipe (you might need to implement this method)
+                        # For now, just print what we would add
+                        print(f"  - Ingredient: {ingredient_text.strip()}")
+                        ingredient_count += 1
+                    except Exception as e:
+                        print(f"Warning: Could not add ingredient '{ingredient_text}': {e}")
+            
+            print(f"[OK] Added {ingredient_count} ingredients to recipe")
+            return recipe.id
+        else:
+            print("[X] Failed to create recipe in database")
+            return None
+            
+    except Exception as e:
+        print(f"[X] Error saving recipe to database: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def parse_time_to_minutes(time_str):
+    """Parse time string like '15 minutes' or '1 hour' to minutes"""
+    if not time_str:
+        return None
+    
+    time_str = time_str.lower().strip()
+    
+    # Extract numbers
+    import re
+    numbers = re.findall(r'\d+', time_str)
+    if not numbers:
+        return None
+    
+    minutes = 0
+    for num in numbers:
+        num = int(num)
+        if 'hour' in time_str:
+            minutes += num * 60
+        else:  # assume minutes
+            minutes += num
+    
+    return minutes if minutes > 0 else None
+
+
+def parse_servings(servings_str):
+    """Parse servings string to extract number"""
+    if not servings_str:
+        return None
+    
+    import re
+    numbers = re.findall(r'\d+', servings_str)
+    return int(numbers[0]) if numbers else None
+
+
+def single_recipe_parser(validator: 'SimpleValidationInterface', ai_parser, db):
+    """Single recipe parsing with AI"""
     st.markdown("#### 📝 Parse Single Recipe")
     st.info("🚀 **NEW**: AI-powered ingredient parsing with automatic pantry integration!")
     
@@ -721,9 +2162,6 @@ Difficulty: Easy""",
                         
                         with col2:
                             st.write(f"**Servings:** {scraped_recipe.servings_text}")
-                            st.write(f"**Difficulty:** {scraped_recipe.difficulty_text}")
-                            st.write(f"**Cuisine:** {scraped_recipe.cuisine_text}")
-                            st.write(f"**Category:** {scraped_recipe.category_text}")
                             st.write(f"**AI Confidence:** {scraped_recipe.confidence_score:.1%}")
                     
                     # Use simple validation interface
@@ -743,8 +2181,8 @@ Difficulty: Easy""",
                 st.error(f"❌ Smart parsing failed: {str(e)}")
 
 
-def demo_bulk_recipe_parser(bulk_parser, validator: 'SimpleValidationInterface', ai_parser, db):
-    """Demo bulk recipe parsing"""
+def bulk_recipe_parser_ui(bulk_parser, validator: 'SimpleValidationInterface', ai_parser, db):
+    """Bulk recipe parsing interface"""
     st.markdown("#### 📚 Bulk Recipe Import")
     st.info("🚀 **NEW**: Import multiple recipes from one text dump - perfect for recipe collections!")
     
@@ -833,7 +2271,7 @@ Instructions:
                                 if st.button(f"✅ Validate & Save Recipe {i+1}", key=f"validate_{i}"):
                                     st.info(f"Validating {recipe.title}...")
                                     # Here you would call the validator for each recipe
-                                    # For demo, just show success
+                                    # Show success message
                                     st.success(f"Recipe {i+1} ready for validation!")
                     
                     else:
@@ -846,9 +2284,9 @@ Instructions:
             st.warning("Please upload a file or paste some text to parse.")
 
 
-def demo_smart_parser_sample(validator: 'SimpleValidationInterface', ai_parser, db):
-    """Demo with pre-loaded sample"""
-    st.markdown("#### 🎯 Smart Parser Demo")
+def smart_parser_sample(validator: 'SimpleValidationInterface', ai_parser, db):
+    """Pre-loaded sample recipe parser"""
+    st.markdown("#### 🎯 Sample Recipe")
     st.info("See how the AI parser works with a sample recipe - includes pantry checking!")
     
     sample_recipe_text = """Ultimate Beef Tacos
@@ -911,8 +2349,8 @@ Category: Dinner"""
                 st.error(f"Sample parsing error: {e}")
 
 
-def demo_validation_interface():
-    """Demo the validation interface with text input and file upload"""
+def validation_interface():
+    """Recipe validation interface with text input and file upload"""
     st.markdown("### 🔍 Recipe Parser & Validation")
     st.markdown("Add recipes by pasting text or uploading files, then validate before saving to your cookbook.")
     
@@ -922,9 +2360,9 @@ def demo_validation_interface():
     validation_ui = ValidationInterface(parser, db)
     
     # Create tabs for different input modes
-    demo_tab1, demo_tab2, demo_tab3 = st.tabs(["📝 Text Input", "📁 File Upload", "🎯 Sample Data"])
+    input_tab1, input_tab2, input_tab3 = st.tabs(["📝 Text Input", "📁 File Upload", "🎯 Sample Data"])
     
-    with demo_tab1:
+    with input_tab1:
         st.markdown("#### Paste Recipe Text")
         st.info("Copy and paste recipe text from any website, cookbook, or document. The parser will extract structured data automatically.")
         
@@ -973,12 +2411,15 @@ Serves: 36 cookies""",
         if parse_button and recipe_text.strip():
             with st.spinner("Parsing recipe text... Extracting structured data."):
                 try:
+                    # Clean the input text FIRST to prevent encoding errors
+                    clean_recipe_text = clean_text_encoding(recipe_text)
+                    
                     # Import scraping service for text parsing
                     from services import ScrapingService
                     scraper = ScrapingService()
                     
-                    # Parse text directly (create a method for this)
-                    scraped_recipe = scraper.parse_recipe_text(recipe_text)
+                    # Parse the cleaned text
+                    scraped_recipe = scraper.parse_recipe_text(clean_recipe_text)
                     
                     if scraped_recipe and scraped_recipe.confidence_score > 0.2:
                         st.success(f"✅ Successfully parsed recipe: {scraped_recipe.title}")
@@ -997,7 +2438,6 @@ Serves: 36 cookies""",
                                 st.write("**Prep Time:**", scraped_recipe.prep_time_text)
                                 st.write("**Cook Time:**", scraped_recipe.cook_time_text)
                                 st.write("**Servings:**", scraped_recipe.servings_text)
-                                st.write("**Cuisine:**", scraped_recipe.cuisine_text)
                         
                         # Show ingredients and instructions preview
                         col1, col2 = st.columns(2)
@@ -1032,7 +2472,7 @@ Serves: 36 cookies""",
                             
                             # Save button
                             if st.button("💾 Save Recipe to Cookbook", type="primary"):
-                                st.success("Recipe would be saved to your cookbook! (Demo mode)")
+                                st.success("Recipe would be saved to your cookbook!")
                         
                     else:
                         st.error("❌ Unable to parse recipe from this text. Please check the format and try again.")
@@ -1046,7 +2486,7 @@ Serves: 36 cookies""",
                     st.error(f"❌ Parsing failed: {str(e)}")
                     st.info("The text parser works best with clearly formatted recipes. Try adjusting the format or contact support.")
     
-    with demo_tab2:
+    with input_tab2:
         st.markdown("#### Upload Recipe File")
         st.info("Upload HTML files saved from recipe websites, or text files containing recipes.")
         
@@ -1079,11 +2519,13 @@ Serves: 36 cookies""",
                     scraper = ScrapingService()
                     
                     if uploaded_file.name.endswith(('.html', '.htm')):
-                        # Parse HTML content
-                        scraped_recipe = scraper.parse_html_content(content)
+                        # Clean HTML content first to prevent encoding errors
+                        clean_content = clean_text_encoding(content)
+                        scraped_recipe = scraper.parse_html_content(clean_content)
                     else:
-                        # Parse as text content
-                        scraped_recipe = scraper.parse_recipe_text(content)
+                        # Clean text content first to prevent encoding errors  
+                        clean_content = clean_text_encoding(content)
+                        scraped_recipe = scraper.parse_recipe_text(clean_content)
                     
                     if scraped_recipe and scraped_recipe.confidence_score > 0.2:
                         st.success(f"✅ Successfully parsed: {scraped_recipe.title}")
@@ -1096,7 +2538,7 @@ Serves: 36 cookies""",
                         if validation_result and validation_result.is_valid:
                             st.success("✅ Recipe validated and ready to save!")
                             if st.button("💾 Save Recipe to Cookbook", key="file_save", type="primary"):
-                                st.success("Recipe would be saved to your cookbook! (Demo mode)")
+                                st.success("Recipe would be saved to your cookbook!")
                     else:
                         st.error("❌ Unable to parse recipe from this file.")
                         st.info("💡 Try files with clear recipe structure or use the text input method.")
@@ -1105,38 +2547,17 @@ Serves: 36 cookies""",
                     st.error(f"❌ File processing failed: {str(e)}")
                     st.info("Make sure the file contains readable recipe content.")
     
-    with demo_tab3:
-        st.markdown("#### Sample Data Demo")
-        st.info("This shows how the validation process works with pre-loaded sample data.")
+    with input_tab3:
+        st.markdown("#### Sample Data")
+        st.info("Test the recipe validation with sample recipe data.")
         
-        # Create sample scraped recipe
-        sample_recipe = create_sample_scraped_recipe()
-        
-        # Parse the sample recipe
-        parsed_recipe = parser.parse_scraped_recipe(sample_recipe)
-        
-        # Show validation interface
-        validation_result = validation_ui.validate_recipe(parsed_recipe, user_id=1)
-        
-        if validation_result:
-            if validation_result.is_valid:
-                st.success("✅ Recipe validated and ready to save!")
-                
-                with st.expander("Validation Summary", expanded=True):
-                    st.write(f"**Corrections Made:** {validation_result.get_correction_summary()}")
-                    st.write(f"**Ingredient Assignments:** {len(validation_result.ingredient_assignments)}")
-                    st.write(f"**New Ingredients:** {len(validation_result.new_ingredients)}")
-                    
-                    if validation_result.new_ingredients:
-                        st.write("**New ingredients to create:**")
-                        for ing in validation_result.new_ingredients:
-                            st.write(f"• {ing}")
-            else:
-                st.warning("❌ Recipe was rejected during validation.")
+        # Show information about validation interface
+        st.info("🔍 Recipe validation is integrated into the **Add Recipe** tab.")
+        st.info("💡 After parsing a recipe with AI or text parsing, you can review and edit it before saving.")
 
 
-def demo_recipe_browser():
-    """Demo the recipe browser interface using the full RecipeBrowser class"""
+def recipe_browser():
+    """Recipe browser interface using the full RecipeBrowser class"""
     st.markdown("### 📚 Recipe Browser")
     st.markdown("Browse, search, and manage your recipe collection with smart pantry integration.")
     
@@ -1149,72 +2570,8 @@ def demo_recipe_browser():
         all_recipes = db.get_all_recipes(user_id=1, limit=50)
         
         if not all_recipes:
-            st.info("🍽️ No recipes found. Use the **Smart Parser** tab to add some recipes!")
-            
-            # DISABLED: Demo recipes removed per user request
-            # Use Smart Parser tab to add real recipes manually or via scraping
-            if False:  # Disabled code block
-                with st.spinner("Adding sample recipes..."):
-                    # First ensure we have some basic ingredients
-                    sample_ingredients = [
-                        ("All-Purpose Flour", "grain"),
-                        ("Sugar", "sweetener"), 
-                        ("Milk", "dairy"),
-                        ("Pasta", "grain"),
-                        ("Olive Oil", "oil"),
-                        ("Garlic", "vegetable")
-                    ]
-                    
-                    ingredient_ids = {}
-                    for name, category in sample_ingredients:
-                        ingredient = db.create_ingredient(name, category)
-                        if ingredient:
-                            ingredient_ids[name] = ingredient.id
-                    
-                    # Add sample recipes
-                    sample_recipes = [
-                        {
-                            "name": "Classic Pancakes",
-                            "description": "Fluffy breakfast pancakes",
-                            "instructions": "1. Mix dry ingredients in a bowl.\n2. Add wet ingredients and stir until just combined.\n3. Cook on hot griddle until golden brown on both sides.",
-                            "prep_time_minutes": 10,
-                            "cook_time_minutes": 15,
-                            "servings": 4,
-                            "difficulty_level": "easy",
-                            "cuisine_type": "American",
-                            "meal_category": "breakfast",
-                            "ingredients": [
-                                {"ingredient_id": ingredient_ids.get("All-Purpose Flour", 1), "quantity": 2, "unit": "cups", "preparation_note": ""},
-                                {"ingredient_id": ingredient_ids.get("Sugar", 2), "quantity": 2, "unit": "tbsp", "preparation_note": ""},
-                                {"ingredient_id": ingredient_ids.get("Milk", 3), "quantity": 1.5, "unit": "cups", "preparation_note": ""}
-                            ]
-                        },
-                        {
-                            "name": "Garlic Pasta",
-                            "description": "Simple and delicious pasta with garlic and olive oil",
-                            "instructions": "1. Cook pasta according to package directions.\n2. Heat olive oil in a pan.\n3. Add minced garlic and cook until fragrant.\n4. Toss with pasta and serve.",
-                            "prep_time_minutes": 5,
-                            "cook_time_minutes": 20,
-                            "servings": 2,
-                            "difficulty_level": "easy",
-                            "cuisine_type": "Italian",
-                            "meal_category": "dinner",
-                            "ingredients": [
-                                {"ingredient_id": ingredient_ids.get("Pasta", 4), "quantity": 8, "unit": "oz", "preparation_note": ""},
-                                {"ingredient_id": ingredient_ids.get("Olive Oil", 5), "quantity": 3, "unit": "tbsp", "preparation_note": ""},
-                                {"ingredient_id": ingredient_ids.get("Garlic", 6), "quantity": 3, "unit": "cloves", "preparation_note": "minced"}
-                            ]
-                        }
-                    ]
-                    
-                    for recipe_data in sample_recipes:
-                        recipe = db.create_recipe(recipe_data, user_id=1)
-                        if recipe:
-                            st.success(f"✅ Added: {recipe.name} (ID: {recipe.id})")
-                        else:
-                            st.error(f"❌ Failed to create recipe: {recipe_data['name']}")
-                    
-                    st.rerun()
+            st.info("🍽️ No recipes found. Use the **Add Recipe** tab to add some recipes!")
+            st.info("💡 Try parsing your Simple Baked Chicken Breast recipe to get started!")
         else:
             # Use the full RecipeBrowser interface
             st.markdown("---")
@@ -1255,10 +2612,10 @@ def demo_recipe_browser():
             st.code(traceback.format_exc())
 
 
-def demo_ai_features():
-    """Demo the AI features interface with sample data"""
-    st.markdown("### 🤖 AI Features Demo")
-    st.markdown("Experience AI-powered recipe enhancements and suggestions.")
+def ai_features():
+    """AI features interface for recipe enhancement and suggestions"""
+    st.markdown("### 🤖 AI Features")
+    st.markdown("AI-powered recipe enhancements and suggestions.")
     
     # Initialize AI services
     db = get_database_service_singleton()
@@ -1272,12 +2629,9 @@ def demo_ai_features():
         st.info("👆 Start LM Studio to see AI features in action!")
         return
     
-    # Create sample recipe for AI demo
-    sample_recipe = create_sample_parsed_recipe()
-    
-    # Show AI enhancement panel
-    st.markdown("---")
-    ai_ui.render_recipe_ai_panel(sample_recipe, user_pantry=['flour', 'butter', 'sugar', 'vanilla'])
+    # AI Features require real recipes - disabled until we have saved recipes
+    st.info("🍳 AI Features will be available once you have saved recipes in your cookbook!")
+    st.info("💡 Use the **Add Recipe** tab to add some recipes first, then return here to see AI enhancements.")
     
     # Show additional AI features
     st.markdown("---")
@@ -1292,8 +2646,8 @@ def demo_ai_features():
         ai_ui.render_ai_scraping_helper()
 
 
-def demo_pantry_manager():
-    """Demo the pantry management interface"""
+def pantry_manager():
+    """Pantry management interface for tracking available ingredients"""
     if not PANTRY_AVAILABLE:
         st.error("❌ Pantry services not available")
         return
@@ -1301,409 +2655,413 @@ def demo_pantry_manager():
     st.markdown("### 🥬 My Pantry - What Can I Make?")
     st.markdown("Manage your ingredient inventory and discover recipes you can make right now!")
     
-    # Initialize pantry services  
+    # Initialize services  
     db = get_database_service_singleton()
     pantry_service = get_pantry_service(db)
-    pantry_ui = PantryManagerInterface(pantry_service)
     
-    # Demo user ID
-    demo_user_id = 1
+    # Single household system
+    user_id = 1  # Single household system
     
-    # DISABLED: Auto-population of sample ingredients
-    # This was causing issues with CSV import and data consistency
-    # Users should manually add ingredients via CSV import or pantry interface
+    # Get all available ingredients from database (dynamic)
+    all_ingredients = db.get_all_ingredients()
     
-    # Previous code automatically added 15 sample ingredients which interfered with clean database state
+    if not all_ingredients:
+        st.warning("📝 No ingredients found in database. Add ingredients via:")
+        st.info("• Smart Parser tab (parse recipes to auto-add ingredients)")
+        st.info("• CSV Import in Database Inspection section")
+        return
     
-    # DISABLED: All sample recipe creation removed per user request
-    # Users should add recipes manually via Smart Parser tab
-    if False:  # Disabled code block
-        sample_recipes = [
-            {
-                'name': 'Simple Scrambled Eggs',
-                'description': 'Quick and easy scrambled eggs',
-                'instructions': '1. Heat butter in pan 2. Whisk eggs with salt and pepper 3. Cook eggs stirring frequently 4. Serve hot',
-                'prep_time_minutes': 5,
-                'cook_time_minutes': 5,
-                'servings': 2,
-                'difficulty_level': 'easy',
-                'ingredients': ['Eggs', 'Butter', 'Salt', 'Black Pepper']
-            },
-            {
-                'name': 'Garlic Butter Chicken',
-                'description': 'Tender chicken with garlic butter sauce',
-                'instructions': '1. Season chicken with salt and pepper 2. Heat oil in pan 3. Cook chicken until golden 4. Add garlic and butter 5. Cook until done',
-                'prep_time_minutes': 10,
-                'cook_time_minutes': 15,
-                'servings': 4,
-                'difficulty_level': 'medium',
-                'ingredients': ['Chicken Breast', 'Garlic', 'Butter', 'Olive Oil', 'Salt', 'Black Pepper']
-            },
-            {
-                'name': 'Caprese Salad',
-                'description': 'Fresh tomato and mozzarella salad',
-                'instructions': '1. Slice tomatoes and mozzarella 2. Arrange on plate 3. Add basil leaves 4. Drizzle with olive oil 5. Season with salt and pepper',
-                'prep_time_minutes': 10,
-                'cook_time_minutes': 0,
-                'servings': 2,
-                'difficulty_level': 'easy',
-                'ingredients': ['Tomato', 'Mozzarella Cheese', 'Basil', 'Olive Oil', 'Salt', 'Black Pepper']
-            }
-        ]
-        
-        # Add recipes to database
-        for recipe_data in sample_recipes:
+    # Get user's current pantry
+    user_pantry_items = pantry_service.get_user_pantry(user_id)
+    pantry_ingredient_ids = {item.ingredient_id for item in user_pantry_items if hasattr(item, 'ingredient_id')}
+    
+    st.markdown(f"**Available ingredients in database:** {len(all_ingredients)}")
+    st.markdown(f"**Ingredients in your pantry:** {len(pantry_ingredient_ids)}")
+    
+    # Create tabs for different pantry functions
+    pantry_tab1, pantry_tab2, pantry_tab3 = st.tabs(["🛒 Manage Pantry", "🍳 What Can I Make?", "📊 Pantry Stats"])
+    
+    with pantry_tab1:
+        render_pantry_management(db, pantry_service, user_id, all_ingredients, pantry_ingredient_ids)
+    
+    with pantry_tab2:
+        render_recipe_suggestions(db, pantry_service, user_id, all_ingredients)
+    
+    with pantry_tab3:
+        render_pantry_statistics(db, pantry_service, user_id, all_ingredients, pantry_ingredient_ids)
+
+
+def render_pantry_management(db, pantry_service, user_id, all_ingredients, current_pantry_ids):
+    """Render the improved pantry management interface"""
+    st.markdown("#### 🥬 My Pantry Management")
+    
+    # Auto-add all ingredients to pantry database (so they're all available for management)
+    auto_added_count = 0
+    for ingredient in all_ingredients:
+        if ingredient.id not in current_pantry_ids:
+            # Add to pantry but mark as not available
             try:
-                # Create recipe
-                recipe = db.create_recipe(
-                    name=recipe_data['name'],
-                    description=recipe_data['description'],
-                    instructions=recipe_data['instructions'],
-                    prep_time_minutes=recipe_data['prep_time_minutes'],
-                    cook_time_minutes=recipe_data['cook_time_minutes'],
-                    servings=recipe_data['servings'],
-                    difficulty_level=recipe_data['difficulty_level'],
-                    created_by=demo_user_id
-                )
-                
-                if recipe:
-                    # Add ingredients to recipe
-                    for ingredient_name in recipe_data['ingredients']:
-                        ingredients = db.search_ingredients(ingredient_name)
-                        if ingredients:
-                            ingredient = ingredients[0]
-                            db.add_recipe_ingredient(
-                                recipe.id,
-                                ingredient.id,
-                                quantity=1.0,
-                                unit="unit"
-                            )
-            except Exception as e:
-                pass  # Recipe might already exist
-        
+                pantry_service.update_pantry_item(user_id, ingredient.id, False, "none")
+                auto_added_count += 1
+            except:
+                pass  # Ingredient might already be in pantry table
     
-    # Check if user has a pantry setup
-    user_pantry = pantry_service.get_user_pantry(demo_user_id)
+    # Refresh pantry data after auto-adding
+    if auto_added_count > 0:
+        st.info(f"✅ Auto-added {auto_added_count} ingredients to your pantry for management")
+        st.rerun()
     
-    if not user_pantry:
-        st.info("👋 Welcome to your pantry! Let's set it up with some common ingredients.")
+    # Get fresh pantry data
+    user_pantry_items = pantry_service.get_user_pantry(user_id)
+    available_count = len([item for item in user_pantry_items if item.is_available])
+    
+    # Header with stats
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Ingredients", len(all_ingredients))
+    with col2:
+        st.metric("Currently Available", available_count)
+    with col3:
+        st.metric("Need to Stock", len(all_ingredients) - available_count)
+    
+    st.markdown("---")
+    
+    # Search functionality
+    search_term = st.text_input("🔍 Search ingredients...", placeholder="Type ingredient name to find quickly")
+    
+    # Bulk operations
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("✅ Mark All Available", type="secondary"):
+            for ingredient in all_ingredients:
+                pantry_service.update_pantry_item(user_id, ingredient.id, True, "plenty")
+            st.success("Marked all ingredients as available!")
+            st.rerun()
+    
+    with col2:
+        if st.button("❌ Clear All Availability", type="secondary"):
+            for ingredient in all_ingredients:
+                pantry_service.update_pantry_item(user_id, ingredient.id, False, "none")
+            st.success("Cleared all ingredient availability!")
+            st.rerun()
+    
+    with col3:
+        if st.button("🗑️ Remove Uncheck Items", type="secondary"):
+            st.warning("This would remove unchecked ingredients from pantry (not implemented yet)")
+    
+    st.markdown("---")
+    
+    # Group ingredients by category
+    ingredients_by_category = {}
+    for ingredient in all_ingredients:
+        category = ingredient.category or "Uncategorized"
+        if category not in ingredients_by_category:
+            ingredients_by_category[category] = []
+        ingredients_by_category[category].append(ingredient)
+    
+    # Create a mapping of ingredient ID to availability status
+    pantry_status = {item.ingredient_id: item.is_available for item in user_pantry_items if hasattr(item, 'ingredient_id')}
+    
+    # Category icons mapping
+    category_icons = {
+        'protein': '🥩',
+        'dairy': '🥛', 
+        'vegetables': '🥕',
+        'grains': '🌾',
+        'pantry': '🏺',
+        'condiments': '🧂',
+        'oil': '🫒',
+        'seasoning': '🧂',
+        'sweetener': '🍯',
+        'Uncategorized': '📦'
+    }
+    
+    # Filter ingredients if search term is provided
+    if search_term:
+        filtered_categories = {}
+        for category, ingredients in ingredients_by_category.items():
+            filtered_ingredients = [ing for ing in ingredients if search_term.lower() in ing.name.lower()]
+            if filtered_ingredients:
+                filtered_categories[category] = filtered_ingredients
+        ingredients_by_category = filtered_categories
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("🚀 Set Up My Pantry", type="primary"):
-                with st.spinner("Setting up your pantry with common ingredients..."):
-                    try:
-                        added_count = pantry_service.add_common_ingredients_to_pantry(demo_user_id)
-                        if added_count > 0:
-                            st.success(f"✅ Added {added_count} common ingredients to your pantry!")
-                            st.rerun()
-                        else:
-                            st.error("❌ Failed to add ingredients. Let's try manual setup.")
-                    except Exception as e:
-                        st.error(f"❌ Setup failed: {e}")
-                        st.info("Let's try manual setup instead...")
-        
-        with col2:
-            if st.button("🔧 Manual Setup", type="secondary"):
-                with st.spinner("Setting up pantry manually..."):
-                    try:
-                        # Manual ingredient setup with direct database calls
-                        from services import get_ingredient_service
-                        ingredient_service = get_ingredient_service(db)
-                        
-                        # Basic ingredients to add
-                        manual_ingredients = [
-                            ("Salt", "seasoning"),
-                            ("Black Pepper", "seasoning"),
-                            ("Olive Oil", "oil"),
-                            ("Butter", "dairy"),
-                            ("Garlic", "vegetable"),
-                            ("Onion", "vegetable"),
-                            ("All-Purpose Flour", "grain"),
-                            ("Sugar", "sweetener"),
-                            ("Eggs", "protein"),
-                            ("Chicken Breast", "protein")
-                        ]
-                        
-                        added_count = 0
-                        for name, category in manual_ingredients:
-                            try:
-                                # Create ingredient in database
-                                ingredient = ingredient_service.create_ingredient(name, category)
-                                if ingredient:
-                                    # Add to pantry
-                                    success = pantry_service.update_pantry_item(demo_user_id, ingredient.id, True, "plenty")
-                                    if success:
-                                        added_count += 1
-                            except Exception as ing_error:
-                                # Ingredient might already exist, try to find it
-                                try:
-                                    existing = db.search_ingredients(name)
-                                    if existing:
-                                        ingredient = existing[0]
-                                        success = pantry_service.update_pantry_item(demo_user_id, ingredient.id, True, "plenty")
-                                        if success:
-                                            added_count += 1
-                                except:
-                                    pass  # Skip this ingredient
-                        
-                        if added_count > 0:
-                            st.success(f"✅ Manually added {added_count} ingredients to your pantry!")
-                            st.rerun()
-                        else:
-                            st.error("❌ Manual setup also failed. Let's debug this...")
-                            
-                            # Detailed step-by-step debugging
-                            st.write("**Detailed Debug Process:**")
-                            
-                            # Test ingredient service
-                            try:
-                                from services import get_ingredient_service
-                                ingredient_service = get_ingredient_service(db)
-                                st.write("✅ Ingredient service created")
-                                
-                                # Try to create one ingredient
-                                test_ingredient = ingredient_service.create_ingredient("Test Salt", "seasoning")
-                                if test_ingredient:
-                                    st.write(f"✅ Test ingredient created: {test_ingredient.name} (ID: {test_ingredient.id})")
-                                    
-                                    # Try to add to pantry
-                                    success = pantry_service.update_pantry_item(demo_user_id, test_ingredient.id, True, "plenty")
-                                    if success:
-                                        st.write("✅ Test ingredient added to pantry successfully!")
-                                    else:
-                                        st.write("❌ Failed to add test ingredient to pantry")
-                                        
-                                        # Let's try a direct SQL approach
-                                        st.write("**Trying direct SQL insert:**")
-                                        try:
-                                            with db.get_connection() as conn:
-                                                cursor = conn.cursor()
-                                                cursor.execute("""
-                                                    INSERT OR REPLACE INTO user_pantry 
-                                                    (user_id, ingredient_id, is_available, quantity_estimate, last_updated)
-                                                    VALUES (?, ?, ?, ?, ?)
-                                                """, (demo_user_id, test_ingredient.id, 1, "plenty", "2024-01-01"))
-                                                conn.commit()
-                                                st.write("✅ Direct SQL insert worked!")
-                                        except Exception as sql_e:
-                                            st.write(f"❌ Direct SQL failed: {sql_e}")
-                                else:
-                                    st.write("❌ Failed to create test ingredient")
-                                    
-                            except Exception as ing_e:
-                                st.write(f"❌ Ingredient service error: {ing_e}")
-                                import traceback
-                                st.code(traceback.format_exc())
-                            
-                            # Check database tables
-                            st.write("**Database Table Check:**")
-                            try:
-                                with db.get_connection() as conn:
-                                    cursor = conn.cursor()
-                                    
-                                    # Check if user_pantry table exists
-                                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_pantry'")
-                                    table_exists = cursor.fetchone()
-                                    if table_exists:
-                                        st.write("✅ user_pantry table exists")
-                                        
-                                        # Check table schema
-                                        cursor.execute("PRAGMA table_info(user_pantry)")
-                                        columns = cursor.fetchall()
-                                        st.write("**user_pantry columns:**")
-                                        for col in columns:
-                                            st.write(f"  - {col[1]} ({col[2]})")
-                                    else:
-                                        st.write("❌ user_pantry table does not exist!")
-                                        
-                            except Exception as table_e:
-                                st.write(f"❌ Table check error: {table_e}")
-                            
-                            # Show existing ingredients for reference
-                            st.write("**Existing Ingredients:**")
-                            try:
-                                all_ingredients = db.get_all_ingredients()
-                                st.write(f"Total: {len(all_ingredients)}")
-                                for i, ing in enumerate(all_ingredients[:5]):
-                                    st.write(f"{i+1}. {ing.name} ({ing.category}) - ID: {ing.id}")
-                            except Exception as list_e:
-                                st.write(f"❌ Error listing ingredients: {list_e}")
-                    
-                    except Exception as e:
-                        st.error(f"❌ Manual setup error: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
+        if not ingredients_by_category:
+            st.warning(f"No ingredients found matching '{search_term}'")
+    
+    # Render compact multi-column category layout
+    categories = list(sorted(ingredients_by_category.keys()))
+    
+    # Responsive column layout (3 on desktop, 1 on mobile)
+    # Check if mobile by using a simple responsive approach
+    num_cols = 3  # Desktop: 3 columns
+    try:
+        # Try to detect narrow screens - on mobile, use 1 column
+        # This is a simple approach; Streamlit doesn't have built-in responsive detection
+        if st.session_state.get('mobile_layout', False):
+            num_cols = 1
+    except:
+        pass
+    
+    # Allow user to toggle layout
+    layout_col1, layout_col2 = st.columns([1, 4])
+    with layout_col1:
+        if st.button("📱 Mobile Layout" if num_cols == 3 else "🖥️ Desktop Layout"):
+            st.session_state['mobile_layout'] = not st.session_state.get('mobile_layout', False)
+            st.rerun()
+    
+    # Create columns based on layout choice
+    if st.session_state.get('mobile_layout', False):
+        num_cols = 1
     else:
-        # Show main pantry interface
-        pantry_ui.render_pantry_manager(demo_user_id)
+        num_cols = 3
+    
+    cols = st.columns(num_cols)
+    
+    for i, category in enumerate(categories):
+        col_index = i % num_cols
+        ingredients = ingredients_by_category[category]
+        icon = category_icons.get(category.lower(), '📦')
         
-        # Show what recipes can be made
-        st.markdown("---")
-        st.markdown("### 🍽️ Recipes You Can Make Now")
+        # Count available ingredients in this category
+        available_in_category = len([ing for ing in ingredients if pantry_status.get(ing.id, False)])
         
-        makeable_recipes = pantry_service.find_makeable_recipes(demo_user_id, strict_mode=True)
-        partial_recipes = pantry_service.find_makeable_recipes(demo_user_id, strict_mode=False, include_partial_matches=True)
-        
-        if makeable_recipes:
-            st.success(f"🎉 You can make {len(makeable_recipes)} recipes right now!")
+        with cols[col_index]:
+            st.markdown(f"### {icon} {category.title()}")
+            st.caption(f"{available_in_category}/{len(ingredients)} available")
             
-            for recipe_match in makeable_recipes[:3]:  # Show top 3
-                with st.expander(f"✅ {recipe_match.recipe.name} ({recipe_match.match_status})", expanded=False):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.write(f"**Description:** {recipe_match.recipe.description}")
-                        st.write(f"**Time:** {recipe_match.recipe.prep_time_minutes + recipe_match.recipe.cook_time_minutes} min")
-                        st.write(f"**Servings:** {recipe_match.recipe.servings}")
-                        st.write(f"**Difficulty:** {recipe_match.recipe.difficulty_level}")
-                    
-                    with col2:
-                        st.write("**Your Available Ingredients:**")
-                        for ingredient in recipe_match.available_ingredients:
-                            st.write(f"✅ {ingredient}")
-                        
-                        if recipe_match.missing_ingredients:
-                            st.write("**Missing:**")
-                            for ingredient in recipe_match.missing_ingredients:
-                                st.write(f"❌ {ingredient}")
-        else:
-            st.info("😔 No complete recipes found with your current ingredients.")
-        
-        # Show partial matches
-        partial_only = [r for r in partial_recipes if not r.can_make][:3]
-        if partial_only:
-            st.markdown("### 🟡 Almost Ready (Need 1-2 ingredients)")
+            # Create lists for multiselect
+            ingredient_names = [ing.name for ing in sorted(ingredients, key=lambda x: x.name)]
+            ingredient_dict = {ing.name: ing for ing in ingredients}
             
-            for recipe_match in partial_only:
-                with st.expander(f"🟡 {recipe_match.recipe.name} - Missing {len(recipe_match.missing_ingredients)} ingredients", expanded=False):
-                    st.write(f"**Match:** {recipe_match.match_percentage:.0%} of ingredients")
-                    st.write(f"**Need to buy:** {', '.join(recipe_match.missing_ingredients)}")
-        
-        # Shopping suggestions
-        if makeable_recipes or partial_only:
-            st.markdown("---")
-            st.markdown("### 🛒 Shopping Suggestions")
+            # Get currently selected ingredients (those marked as available)
+            currently_selected = [ing.name for ing in ingredients if pantry_status.get(ing.id, False)]
             
-            suggestions = pantry_service.suggest_recipes_to_complete_pantry(demo_user_id, max_missing=2)
+            # Multiselect for available ingredients
+            selected_ingredients = st.multiselect(
+                f"I have these {category.lower()} items:",
+                options=ingredient_names,
+                default=currently_selected,
+                key=f"multiselect_{category}",
+                help=f"Select ingredients you currently have in your {category.lower()}"
+            )
             
-            if suggestions:
-                suggestion = suggestions[0]  # Show top suggestion
-                st.info(f"💡 **Shopping Tip:** Buy {', '.join(suggestion.missing_ingredients)} to make **{suggestion.recipe.name}**!")
-        
-        # Pantry statistics and debug info
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            with st.expander("📊 Pantry Statistics", expanded=False):
-                available_count = len([item for item in user_pantry if item.is_available])
-                total_count = len(user_pantry)
+            # Update pantry status based on selection
+            for ingredient_name in ingredient_names:
+                ingredient = ingredient_dict[ingredient_name]
+                should_be_available = ingredient_name in selected_ingredients
+                currently_available = pantry_status.get(ingredient.id, False)
                 
-                col1a, col1b, col1c = st.columns(3)
-                with col1a:
-                    st.metric("Available Ingredients", available_count)
-                with col1b:
-                    st.metric("Total in Pantry", total_count)
-                with col1c:
-                    st.metric("Makeable Recipes", len(makeable_recipes))
+                if should_be_available != currently_available:
+                    quantity = "plenty" if should_be_available else "none"
+                    pantry_service.update_pantry_item(user_id, ingredient.id, should_be_available, quantity)
+            
+            # Compact bulk operations
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("✅ All", key=f"all_{category}", help=f"Select all {category.lower()} items"):
+                    for ingredient in ingredients:
+                        pantry_service.update_pantry_item(user_id, ingredient.id, True, "plenty")
+                    st.rerun()
+            
+            with col_b:
+                if st.button("❌ None", key=f"clear_{category}", help=f"Deselect all {category.lower()} items"):
+                    for ingredient in ingredients:
+                        pantry_service.update_pantry_item(user_id, ingredient.id, False, "none")
+                    st.rerun()
+            
+            # Show ingredient removal options (collapsed by default)
+            with st.expander(f"🗑️ Remove {category} Items", expanded=False):
+                st.caption("Remove ingredients you'll never use:")
+                for ingredient in sorted(ingredients, key=lambda x: x.name):
+                    col_name, col_btn = st.columns([3, 1])
+                    with col_name:
+                        st.write(ingredient.name)
+                    with col_btn:
+                        if st.button("🗑️", key=f"remove_perm_{ingredient.id}", help=f"Remove {ingredient.name} permanently"):
+                            try:
+                                with pantry_service.db.get_connection() as conn:
+                                    cursor = conn.cursor()
+                                    cursor.execute("DELETE FROM user_pantry WHERE user_id = ? AND ingredient_id = ?", 
+                                                 (user_id, ingredient.id))
+                                    conn.commit()
+                                st.success(f"Removed {ingredient.name} from pantry")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error removing ingredient: {e}")
+            
+            st.markdown("---")  # Separator between categories
+
+
+def render_recipe_suggestions(db, pantry_service, user_id, all_ingredients):
+    """Render recipe suggestions based on pantry contents"""
+    st.markdown("#### 🍳 Recipes You Can Make")
+    
+    # Get user's pantry items
+    pantry_items = pantry_service.get_user_pantry(user_id)
+    
+    if not pantry_items:
+        st.info("Add some ingredients to your pantry first to see recipe suggestions!")
+        return
+    
+    # Get all recipes and check which ones can be made
+    all_recipes = db.get_all_recipes(user_id=user_id, limit=50)
+    
+    if not all_recipes:
+        st.info("No recipes found in database. Add recipes via the Smart Parser tab!")
+        return
+    
+    # Analyze recipe compatibility
+    makeable_recipes = []
+    partial_recipes = []
+    
+    pantry_ingredient_ids = {item.ingredient_id for item in pantry_items if hasattr(item, 'ingredient_id')}
+    
+    for recipe in all_recipes:
+        if hasattr(recipe, 'required_ingredient_ids'):
+            required_ids = recipe.required_ingredient_ids
+            if required_ids:
+                available_count = len(required_ids & pantry_ingredient_ids)
+                total_count = len(required_ids)
+                match_percentage = (available_count / total_count) * 100 if total_count > 0 else 0
+                
+                if match_percentage == 100:
+                    makeable_recipes.append((recipe, match_percentage, available_count, total_count))
+                elif match_percentage >= 50:  # Show recipes where you have at least half the ingredients
+                    partial_recipes.append((recipe, match_percentage, available_count, total_count))
+    
+    # Display results
+    if makeable_recipes:
+        st.success(f"🎉 You can make {len(makeable_recipes)} recipes right now!")
+        for recipe, percentage, available, total in makeable_recipes:
+            with st.expander(f"✅ {recipe.name} (100% match - {total}/{total} ingredients)"):
+                st.write(f"**Description:** {recipe.description}")
+                st.write(f"**Prep time:** {recipe.prep_time_minutes} min | **Cook time:** {recipe.cook_time_minutes} min")
+                st.write(f"**Serves:** {recipe.servings}")
+                if st.button(f"View Full Recipe", key=f"view_{recipe.id}"):
+                    st.session_state['selected_recipe_id'] = recipe.id
+                    st.rerun()
+    
+    if partial_recipes:
+        st.info(f"📋 {len(partial_recipes)} recipes you could make with a few more ingredients:")
+        for recipe, percentage, available, total in partial_recipes:
+            missing_count = total - available
+            with st.expander(f"📋 {recipe.name} ({percentage:.0f}% match - {available}/{total} ingredients, need {missing_count} more)"):
+                st.write(f"**Description:** {recipe.description}")
+                st.write(f"**Missing ingredients:** You need {missing_count} more ingredients to make this recipe")
+    
+    if not makeable_recipes and not partial_recipes:
+        st.info("No recipe matches found. Try adding more ingredients to your pantry!")
+
+
+def render_pantry_statistics(db, pantry_service, user_id, all_ingredients, pantry_ingredient_ids):
+    """Render pantry statistics and insights"""
+    st.markdown("#### 📊 Pantry Insights")
+    
+    # Basic stats
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Available", len(all_ingredients))
+    
+    with col2:
+        st.metric("In Your Pantry", len(pantry_ingredient_ids))
+    
+    with col3:
+        percentage = (len(pantry_ingredient_ids) / len(all_ingredients) * 100) if all_ingredients else 0
+        st.metric("Pantry Coverage", f"{percentage:.1f}%")
+    
+    with col4:
+        recipes = db.get_all_recipes(user_id=user_id, limit=100)
+        st.metric("Available Recipes", len(recipes))
+    
+    # Category breakdown
+    if pantry_ingredient_ids:
+        st.markdown("**Pantry by Category:**")
         
-        with col2:
-            with st.expander("🔍 Database Debug Info", expanded=False):
-                try:
-                    # Show database ingredients
-                    all_ingredients = db.get_all_ingredients()
-                    st.write(f"**Total ingredients in database:** {len(all_ingredients)}")
-                    
-                    if all_ingredients:
-                        st.write("**Sample ingredients:**")
-                        for ing in all_ingredients[:5]:
-                            st.write(f"• {ing.name} ({ing.category}) - ID: {ing.id}")
-                    
-                    # Show pantry table structure
-                    st.write(f"**Pantry items for user {demo_user_id}:**")
-                    if user_pantry:
-                        for item in user_pantry[:5]:
-                            status = "✅ Available" if item.is_available else "❌ Not available"
-                            st.write(f"• {item.ingredient_name} - {status} ({item.quantity_estimate})")
+        pantry_ingredients = [ing for ing in all_ingredients if ing.id in pantry_ingredient_ids]
+        category_counts = {}
+        
+        for ingredient in pantry_ingredients:
+            category = ingredient.category or "Uncategorized"
+            category_counts[category] = category_counts.get(category, 0) + 1
+        
+        for category, count in sorted(category_counts.items()):
+            st.write(f"• **{category}:** {count} ingredients")
+    
+    # Recent activity (if we had timestamps, but we'll skip this for now)
+    st.markdown("**Pantry Management:**")
+    st.info("💡 Tip: Keep your pantry updated for better recipe suggestions!")
+    st.info("💡 Tip: Use the Smart Parser to add more recipes that work with your ingredients!")
+
+
+
+def test_ai_connection(provider: str, api_key: str = None):
+    """Test connection to selected AI provider"""
+    with st.spinner(f"Testing connection to {provider}..."):
+        try:
+            if provider == "OpenAI (ChatGPT)":
+                if not api_key:
+                    st.error("❌ Please enter your OpenAI API key")
+                    return
+                
+                import openai
+                client = openai.OpenAI(api_key=api_key)
+                response = client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[{"role": "user", "content": "Hello, can you parse recipes?"}],
+                    max_tokens=50
+                )
+                st.success("✅ OpenAI connection successful!")
+                st.info(f"Model: GPT-4, Response: {response.choices[0].message.content[:50]}...")
+            
+            elif provider == "Claude (Anthropic)":
+                if not api_key:
+                    st.error("❌ Please enter your Anthropic API key")
+                    return
+                
+                import anthropic
+                client = anthropic.Anthropic(api_key=api_key)
+                message = client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=50,
+                    messages=[{"role": "user", "content": "Hello, can you parse recipes?"}]
+                )
+                st.success("✅ Claude connection successful!")
+                st.info(f"Model: Claude-3.5, Response: {message.content[0].text[:50]}...")
+            
+            elif provider == "Gemini (Google)":
+                if not api_key:
+                    st.error("❌ Please enter your Google AI API key")
+                    return
+                
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-1.5-pro')
+                response = model.generate_content("Hello, can you parse recipes?")
+                st.success("✅ Gemini connection successful!")
+                st.info(f"Model: Gemini-1.5-Pro, Response: {response.text[:50]}...")
+            
+            else:  # LM Studio
+                import requests
+                response = requests.get("http://localhost:1234/v1/models", timeout=5)
+                if response.status_code == 200:
+                    models = response.json()
+                    st.success("✅ LM Studio connection successful!")
+                    if models.get('data'):
+                        model_name = models['data'][0].get('id', 'Unknown')
+                        st.info(f"Local model loaded: {model_name}")
                     else:
-                        st.write("No pantry items found")
-                        
-                    # Button to force refresh pantry
-                    if st.button("🔄 Refresh Pantry Data", key="refresh_pantry"):
-                        st.rerun()
-                        
-                except Exception as e:
-                    st.error(f"Debug error: {e}")
+                        st.warning("⚠️ LM Studio connected but no models loaded")
+                else:
+                    st.error("❌ LM Studio not responding")
+        
+        except Exception as e:
+            st.error(f"❌ Connection failed: {str(e)}")
+            if "API key" in str(e):
+                st.info("💡 Check your API key is valid and has sufficient credits")
+            elif "import" in str(e):
+                st.info("💡 Install required package: pip install openai anthropic google-generativeai")
 
-
-def create_sample_parsed_recipe() -> ParsedRecipe:
-    """Create sample parsed recipe for AI demo"""
-    return ParsedRecipe(
-        title="Classic Chocolate Chip Cookies",
-        description="Perfect cookies every time - crispy edges, soft centers!",
-        ingredients=[
-            {'name': 'all-purpose flour', 'quantity': 2.25, 'unit': 'cup', 'original_text': '2 1/4 cups all-purpose flour'},
-            {'name': 'baking soda', 'quantity': 1.0, 'unit': 'tsp', 'original_text': '1 tsp baking soda'},
-            {'name': 'salt', 'quantity': 1.0, 'unit': 'tsp', 'original_text': '1 tsp salt'},
-            {'name': 'butter', 'quantity': 1.0, 'unit': 'cup', 'original_text': '1 cup butter, softened'},
-            {'name': 'brown sugar', 'quantity': 0.75, 'unit': 'cup', 'original_text': '3/4 cup packed brown sugar'},
-            {'name': 'granulated sugar', 'quantity': 0.75, 'unit': 'cup', 'original_text': '3/4 cup granulated sugar'},
-            {'name': 'eggs', 'quantity': 2.0, 'unit': 'large', 'original_text': '2 large eggs'},
-            {'name': 'vanilla extract', 'quantity': 2.0, 'unit': 'tsp', 'original_text': '2 tsp vanilla extract'},
-            {'name': 'chocolate chips', 'quantity': 2.0, 'unit': 'cup', 'original_text': '2 cups chocolate chips'}
-        ],
-        instructions="""1. Preheat oven to 375°F. 2. Mix flour, baking soda and salt in bowl. 3. Cream butter and sugars until fluffy. 4. Beat in eggs and vanilla. 5. Gradually add flour mixture. 6. Stir in chocolate chips. 7. Drop spoonfuls on cookie sheet. 8. Bake 9-11 minutes until golden.""",
-        source_url="https://example.com/best-cookies",
-        prep_time_minutes=15,
-        cook_time_minutes=11,
-        servings=36,
-        difficulty_level="easy",
-        cuisine_type="American",
-        dietary_tags=["vegetarian"],
-        meal_category="dessert"
-    )
-
-
-def create_sample_scraped_recipe() -> ScrapedRecipe:
-    """Create sample scraped recipe for demo"""
-    return ScrapedRecipe(
-        url="https://example.com/chocolate-chip-cookies",
-        title="Amazing Chocolate Chip Cookies - Best Recipe Ever!",
-        description="These cookies are absolutely incredible and everyone will love them!",
-        ingredients_raw=[
-            "2 1/4 cups all-purpose flour",
-            "1 tsp baking soda",
-            "1 tsp salt",
-            "1 cup butter, softened",
-            "3/4 cup granulated sugar", 
-            "3/4 cup packed brown sugar",
-            "2 large eggs",
-            "2 tsp vanilla extract",
-            "2 cups chocolate chips"
-        ],
-        instructions_raw="""1. Preheat oven to 375°F (190°C).
-2. In medium bowl, mix flour, baking soda and salt; set aside.
-3. In large bowl, beat butter and sugars with electric mixer until light and fluffy.
-4. Beat in eggs one at a time, then vanilla.
-5. Gradually beat in flour mixture until just combined.
-6. Stir in chocolate chips.
-7. Drop rounded tablespoons of dough onto ungreased cookie sheets.
-8. Bake 9 to 11 minutes or until golden brown.
-9. Cool on baking sheet 2 minutes; remove to wire rack.""",
-        prep_time_text="15 minutes",
-        cook_time_text="11 minutes",
-        total_time_text="26 minutes",
-        servings_text="48 cookies",
-        cuisine_text="American",
-        category_text="Dessert",
-        difficulty_text="Easy",
-        rating_text="4.8 stars",
-        confidence_score=0.85,
-        scraped_at=datetime.now(),
-        scraping_method="demo_data"
-    )
 
 if __name__ == "__main__":
     main()

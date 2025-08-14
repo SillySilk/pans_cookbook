@@ -54,6 +54,7 @@ class RecipeIngredient:
     unit: str  # cup, tablespoon, gram, ounce, etc.
     preparation_note: str = ""  # diced, minced, optional, etc.
     ingredient_order: int = 0  # for display ordering
+    is_optional: bool = False  # whether ingredient is optional
     
     def get_display_text(self) -> str:
         """Format ingredient for display in recipe"""
@@ -68,7 +69,7 @@ class RecipeIngredient:
 class Recipe:
     """
     Core recipe model mapping to recipes table.
-    Adapted from Herbalism app Recipe model with cooking-specific fields.
+    Simplified for single-household use - no user tracking or timestamps.
     """
     id: int
     name: str
@@ -77,30 +78,17 @@ class Recipe:
     prep_time_minutes: int
     cook_time_minutes: int
     servings: int
-    difficulty_level: str = "medium"  # easy, medium, hard
-    cuisine_type: str = ""
-    meal_category: str = ""  # breakfast, lunch, dinner, snack, dessert
-    dietary_tags: List[str] = field(default_factory=list)  # vegetarian, vegan, gluten-free, etc.
     nutritional_info: Optional[NutritionData] = None
-    created_by: int = 0  # user_id
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
     source_url: Optional[str] = None
-    is_public: bool = True
-    rating: Optional[float] = None  # average user rating
-    rating_count: int = 0
+    image_path: Optional[str] = None
     
     # Relationship fields (populated by database service)
     ingredients: List[RecipeIngredient] = field(default_factory=list)
     required_ingredient_ids: Set[int] = field(default_factory=set)
     
     def __post_init__(self):
-        """Ensure dietary_tags is a list and normalize difficulty"""
-        if isinstance(self.dietary_tags, str):
-            self.dietary_tags = [tag.strip() for tag in self.dietary_tags.split(',') if tag.strip()]
-        
-        if self.difficulty_level not in ['easy', 'medium', 'hard']:
-            self.difficulty_level = 'medium'
+        """Basic validation"""
+        pass
     
     def get_total_time_minutes(self) -> int:
         """Calculate total cooking time"""
@@ -108,7 +96,9 @@ class Recipe:
     
     def has_dietary_tag(self, tag: str) -> bool:
         """Check if recipe has a specific dietary tag (case-insensitive)"""
-        return tag.lower() in [dt.lower() for dt in self.dietary_tags]
+        # This method is kept for compatibility but always returns False
+        # since we removed dietary_tags from the simplified model
+        return False
     
     def can_make_with_ingredients(self, available_ingredient_ids: Set[int]) -> tuple[bool, Set[int]]:
         """

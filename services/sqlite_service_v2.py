@@ -97,7 +97,7 @@ class EnhancedSQLiteService:
             raise
     
     def _ensure_schema_exists(self):
-        """Create database schema if it doesn't exist"""
+        """Create database schema if it doesn't exist and migrate existing tables"""
         schema_sql = """
         -- Users table
         CREATE TABLE IF NOT EXISTS users (
@@ -127,7 +127,7 @@ class EnhancedSQLiteService:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Recipes table
+        -- Recipes table (simplified for single-household use)
         CREATE TABLE IF NOT EXISTS recipes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -136,16 +136,9 @@ class EnhancedSQLiteService:
             prep_time_minutes INTEGER DEFAULT 0,
             cook_time_minutes INTEGER DEFAULT 0,
             servings INTEGER DEFAULT 1,
-            difficulty_level TEXT DEFAULT 'medium',
-            cuisine_type TEXT DEFAULT '',
-            meal_category TEXT DEFAULT '',
-            dietary_tags TEXT DEFAULT '',
             nutritional_info TEXT DEFAULT '{}',
-            created_by INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             source_url TEXT DEFAULT '',
-            confidence_score REAL DEFAULT 1.0
+            image_path TEXT DEFAULT ''
         );
 
         -- Recipe ingredients junction table
@@ -207,7 +200,6 @@ class EnhancedSQLiteService:
         );
 
         -- Create indexes for performance
-        CREATE INDEX IF NOT EXISTS idx_recipes_created_by ON recipes (created_by);
         CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe_id ON recipe_ingredients (recipe_id);
         CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient_id ON recipe_ingredients (ingredient_id);
         CREATE INDEX IF NOT EXISTS idx_collections_user_id ON collections (user_id);
@@ -231,9 +223,94 @@ class EnhancedSQLiteService:
                 conn.executescript(schema_sql)
                 conn.commit()
                 logger.info("SQLite schema initialized successfully")
+                
+                # Migrate existing recipes table if needed
+                self._migrate_recipes_table(conn)
+                
         except Exception as e:
             logger.error(f"Failed to initialize SQLite schema: {e}")
             raise
+    
+    def _migrate_recipes_table(self, conn):
+        """Migrate existing recipes table to remove unused columns and add image_path"""
+        try:
+            # Check current table structure
+            cursor = conn.execute("PRAGMA table_info(recipes)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            # Define columns that should be removed
+            columns_to_remove = {'difficulty_level', 'meal_category', 'dietary_tags', 
+                               'is_public', 'rating', 'rating_count', 'confidence_score',
+                               'created_by', 'created_at', 'updated_at', 'cuisine_type'}
+            
+            existing_old_columns = set(columns) & columns_to_remove
+            missing_image_path = 'image_path' not in columns
+            
+            if existing_old_columns or missing_image_path:
+                logger.info(f"Migrating recipes table - removing columns: {existing_old_columns}")
+                
+                # SQLite doesn't support DROP COLUMN, so we need to recreate the table
+                # 1. Create new table with correct schema including image_path
+                conn.execute("""
+                    CREATE TABLE recipes_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        description TEXT DEFAULT '',
+                        instructions TEXT NOT NULL,
+                        prep_time_minutes INTEGER DEFAULT 0,
+                        cook_time_minutes INTEGER DEFAULT 0,
+                        servings INTEGER DEFAULT 1,
+                        nutritional_info TEXT DEFAULT '{}',
+                        source_url TEXT DEFAULT '',
+                        image_path TEXT DEFAULT ''
+                    )
+                """)
+                
+                # 2. Copy data from old table to new table
+                # Check if image_path exists in current table
+                if 'image_path' in columns:
+                    # Old table has image_path, copy it
+                    conn.execute("""
+                        INSERT INTO recipes_new 
+                        (id, name, description, instructions, prep_time_minutes, cook_time_minutes,
+                         servings, nutritional_info, source_url, image_path)
+                        SELECT id, name, description, instructions, prep_time_minutes, cook_time_minutes,
+                               servings, 
+                               COALESCE(nutritional_info, '{}'),
+                               COALESCE(source_url, ''),
+                               COALESCE(image_path, '')
+                        FROM recipes
+                    """)
+                else:
+                    # Old table doesn't have image_path, set default empty
+                    conn.execute("""
+                        INSERT INTO recipes_new 
+                        (id, name, description, instructions, prep_time_minutes, cook_time_minutes,
+                         servings, nutritional_info, source_url, image_path)
+                        SELECT id, name, description, instructions, prep_time_minutes, cook_time_minutes,
+                               servings, 
+                               COALESCE(nutritional_info, '{}'),
+                               COALESCE(source_url, ''),
+                               ''
+                        FROM recipes
+                    """)
+                
+                # 3. Drop old table and rename new table
+                conn.execute("DROP TABLE recipes")
+                conn.execute("ALTER TABLE recipes_new RENAME TO recipes")
+                
+                # 4. Recreate index
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_recipes_cuisine ON recipes (cuisine_type)")
+                
+                conn.commit()
+                logger.info("Successfully migrated recipes table to new schema")
+            else:
+                logger.info("Recipes table already has correct schema, no migration needed")
+                
+        except Exception as e:
+            logger.error(f"Failed to migrate recipes table: {e}")
+            # Don't raise - let the app continue with the existing schema
+            pass
     
     # Ingredient Methods
     def get_all_ingredients(self) -> List[Ingredient]:
@@ -304,10 +381,10 @@ class EnhancedSQLiteService:
     
     # Recipe Methods
     def get_all_recipes(self, user_id: int = None, limit: int = None) -> List[Recipe]:
-        """Get all recipes"""
+        """Get all recipes (user_id ignored for single-household use)"""
         try:
             with self.get_connection() as conn:
-                sql = "SELECT * FROM recipes ORDER BY created_at DESC"
+                sql = "SELECT * FROM recipes ORDER BY id DESC"
                 params = []
                 
                 if limit:
@@ -330,23 +407,19 @@ class EnhancedSQLiteService:
     
     def create_recipe(self, title: str, description: str = "", instructions: str = "", 
                      prep_time_minutes: int = 0, cook_time_minutes: int = 0, 
-                     servings: int = 1, difficulty_level: str = "medium",
-                     cuisine_type: str = "", meal_category: str = "", 
-                     dietary_tags: str = "", created_by: int = 0, **kwargs) -> Optional[Recipe]:
+                     servings: int = 1, **kwargs) -> Optional[Recipe]:
         """Create a new recipe"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.execute("""
                     INSERT INTO recipes (
                         name, description, instructions, prep_time_minutes, cook_time_minutes,
-                        servings, difficulty_level, cuisine_type, meal_category, dietary_tags,
-                        nutritional_info, created_by, source_url, confidence_score
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        servings, nutritional_info, source_url, image_path
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     title, description, instructions, prep_time_minutes, cook_time_minutes,
-                    servings, difficulty_level, cuisine_type, meal_category, dietary_tags,
-                    json.dumps(kwargs.get('nutritional_info', {})), created_by,
-                    kwargs.get('source_url', ''), kwargs.get('confidence_score', 1.0)
+                    servings, json.dumps(kwargs.get('nutritional_info', {})), 
+                    kwargs.get('source_url', ''), kwargs.get('image_path', '')
                 ))
                 
                 recipe_id = cursor.lastrowid
@@ -376,6 +449,53 @@ class EnhancedSQLiteService:
         except Exception as e:
             logger.error(f"Error loading recipe {recipe_id}: {e}")
             return None
+    
+    def delete_recipe(self, recipe_id: int) -> bool:
+        """Delete a recipe and its associated data"""
+        try:
+            with self.get_connection() as conn:
+                # Delete recipe ingredients first (foreign key constraint)
+                conn.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
+                
+                # Delete from collections if any
+                conn.execute("DELETE FROM collection_recipes WHERE recipe_id = ?", (recipe_id,))
+                
+                # Delete the recipe itself
+                cursor = conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
+                
+                conn.commit()
+                
+                if cursor.rowcount > 0:
+                    logger.info(f"Successfully deleted recipe {recipe_id}")
+                    return True
+                else:
+                    logger.warning(f"Recipe {recipe_id} not found for deletion")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Failed to delete recipe {recipe_id}: {e}")
+            return False
+    
+    def update_recipe_image(self, recipe_id: int, image_path: str) -> bool:
+        """Update recipe image path"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute(
+                    "UPDATE recipes SET image_path = ? WHERE id = ?", 
+                    (image_path, recipe_id)
+                )
+                conn.commit()
+                
+                if cursor.rowcount > 0:
+                    logger.info(f"Successfully updated image for recipe {recipe_id}")
+                    return True
+                else:
+                    logger.warning(f"Recipe {recipe_id} not found for image update")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Failed to update recipe image {recipe_id}: {e}")
+            return False
     
     # Database Statistics
     def get_database_stats(self) -> Dict[str, Any]:
@@ -411,12 +531,18 @@ class EnhancedSQLiteService:
         if not row:
             return None
         
+        # Parse common_substitutes from database
+        common_substitutes = []
+        if row['common_substitutes']:
+            common_substitutes = row['common_substitutes'].split(',')
+        
         return Ingredient(
             id=row['id'],
             name=row['name'],
             category=row['category'],
-            common_names=[row['name']],  # Simple implementation
-            nutritional_info=json.loads(row['nutritional_data']) if row['nutritional_data'] else {}
+            common_substitutes=common_substitutes,
+            storage_tips=row['storage_tips'] or '',
+            nutritional_data=json.loads(row['nutritional_data']) if row['nutritional_data'] else {}
         )
     
     def _row_to_recipe(self, row) -> Recipe:
@@ -432,20 +558,43 @@ class EnhancedSQLiteService:
             prep_time_minutes=row['prep_time_minutes'],
             cook_time_minutes=row['cook_time_minutes'],
             servings=row['servings'],
-            difficulty_level=row['difficulty_level'],
-            cuisine_type=row['cuisine_type'],
-            meal_category=row['meal_category'],
-            dietary_tags=row['dietary_tags'].split(',') if row['dietary_tags'] else [],
             nutritional_info=json.loads(row['nutritional_info']) if row['nutritional_info'] else {},
-            created_by=row['created_by'],
             source_url=row['source_url'],
-            confidence_score=row['confidence_score']
+            image_path=row['image_path'] if 'image_path' in row.keys() else ''
         )
     
     def _get_recipe_ingredient_ids(self, recipe_id: int, conn) -> Set[int]:
         """Get set of ingredient IDs for a recipe"""
         cursor = conn.execute("SELECT ingredient_id FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
         return {row['ingredient_id'] for row in cursor.fetchall()}
+    
+    def _row_to_recipe_ingredient(self, row):
+        """Convert database row to RecipeIngredient object (for pantry service compatibility)"""
+        if not row:
+            return None
+        
+        from models.recipe_models import RecipeIngredient
+        
+        # Handle both dict-like and sqlite3.Row objects
+        def safe_get(row, key, default=None):
+            try:
+                if hasattr(row, 'get'):
+                    return row.get(key, default)
+                else:
+                    # For sqlite3.Row objects, access by column name
+                    return row[key] if key in row.keys() else default
+            except (KeyError, IndexError):
+                return default
+        
+        return RecipeIngredient(
+            recipe_id=safe_get(row, 'recipe_id'),
+            ingredient_id=safe_get(row, 'ingredient_id'),
+            quantity=safe_get(row, 'quantity', 1.0),
+            unit=safe_get(row, 'unit', ''),
+            preparation_note=safe_get(row, 'preparation_note', ''),
+            ingredient_order=safe_get(row, 'ingredient_order', 0),
+            is_optional=bool(safe_get(row, 'is_optional', 0))
+        )
     
     # Pantry Management Methods (for pantry service compatibility)
     def get_user_pantry(self, user_id: int):
@@ -475,6 +624,31 @@ class EnhancedSQLiteService:
                 return True
         except Exception as e:
             logger.error(f"Error updating pantry item: {e}")
+            return False
+    
+    def add_recipe_ingredient(self, recipe_id: int, ingredient_id: int, quantity: float = 1.0, 
+                             unit: str = "", preparation_note: str = "", ingredient_order: int = 0, 
+                             is_optional: bool = False) -> bool:
+        """Add ingredient to recipe with quantity and preparation details"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute("""
+                    INSERT OR REPLACE INTO recipe_ingredients 
+                    (recipe_id, ingredient_id, quantity, unit, preparation_note, ingredient_order, is_optional)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (recipe_id, ingredient_id, quantity, unit, preparation_note, ingredient_order, int(is_optional)))
+                
+                conn.commit()
+                
+                if cursor.rowcount > 0:
+                    logger.info(f"Successfully added ingredient {ingredient_id} to recipe {recipe_id}")
+                    return True
+                else:
+                    logger.warning(f"Failed to add ingredient {ingredient_id} to recipe {recipe_id}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Error adding recipe ingredient: {e}")
             return False
 
 

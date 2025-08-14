@@ -46,8 +46,8 @@ class DatabaseConfig:
         except:
             pass
         
-        # Default path
-        return 'database/pans_cookbook.db'
+        # Default path - use root directory
+        return 'pans_cookbook.db'
     
 
 def get_database_service():

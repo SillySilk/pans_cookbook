@@ -159,33 +159,18 @@ class RecipeBrowser:
             st.info("💡 Use the 'My Pantry' page to select ingredients you have available.")
         
         # Search and filter controls
-        col1, col2, col3 = st.columns([2, 1, 1])
+        col1, col2 = st.columns([3, 1])
         
         with col1:
             search_query = st.text_input(
                 "🔍 Search recipes",
-                placeholder="Search by name, cuisine, or description...",
+                placeholder="Search by name or description...",
                 key=self.SEARCH_KEY
             )
         
         with col2:
-            # Cuisine filter
-            all_recipes = self._get_all_recipes()
-            cuisines = sorted(set(r.cuisine_type for r in all_recipes if r.cuisine_type))
-            selected_cuisine = st.selectbox(
-                "🌍 Cuisine",
-                options=["All"] + cuisines,
-                key=f"{self.FILTER_KEY}_cuisine"
-            )
-        
-        with col3:
-            # Meal category filter
-            categories = sorted(set(r.meal_category for r in all_recipes if r.meal_category))
-            selected_category = st.selectbox(
-                "🍽️ Meal Type",
-                options=["All"] + categories,
-                key=f"{self.FILTER_KEY}_category"
-            )
+            # Placeholder for future filters if needed
+            st.write("")  # Empty space for layout consistency
         
         # Advanced filters in expander
         with st.expander("🔧 Advanced Filters"):
@@ -194,8 +179,10 @@ class RecipeBrowser:
             with col1:
                 difficulty_filter = st.selectbox(
                     "Difficulty Level",
-                    options=["All", "easy", "medium", "hard"],
-                    key=f"{self.FILTER_KEY}_difficulty"
+                    options=["All"],
+                    key=f"{self.FILTER_KEY}_difficulty",
+                    disabled=True,
+                    help="Difficulty levels removed in simplified schema"
                 )
                 
                 # Cooking time range filter
@@ -218,15 +205,14 @@ class RecipeBrowser:
                 )
             
             with col2:
-                # Dietary restrictions filter
+                # Dietary restrictions filter - disabled for simplified schema
                 st.markdown("**🌱 Dietary Restrictions:**")
                 dietary_filters = st.multiselect(
                     "Must include these dietary tags",
-                    options=[
-                        "vegetarian", "vegan", "gluten-free", "dairy-free", "nut-free",
-                        "low-carb", "keto", "paleo", "high-protein", "low-sodium"
-                    ],
-                    key=f"{self.FILTER_KEY}_dietary"
+                    options=[],
+                    key=f"{self.FILTER_KEY}_dietary",
+                    disabled=True,
+                    help="Dietary tags removed in simplified schema"
                 )
                 
                 # Recipe availability filter
@@ -243,8 +229,7 @@ class RecipeBrowser:
         
         # Filter and display recipes
         filtered_recipes = self._filter_recipes(
-            search_query, selected_cuisine, selected_category, 
-            difficulty_filter, time_range, servings_range, dietary_filters,
+            search_query, difficulty_filter, time_range, servings_range, dietary_filters,
             show_only_makeable, require_complete, user_pantry
         )
         
@@ -255,93 +240,190 @@ class RecipeBrowser:
             # Sort recipes by "makeability"
             sorted_recipes = self._sort_recipes_by_availability(filtered_recipes, user_pantry)
             
-            # Display recipes in cards
-            for recipe in sorted_recipes:
-                self._render_recipe_card(recipe, user_pantry)
+            # Display recipes in grid layout
+            self._render_recipe_grid(sorted_recipes, user_pantry)
         
         else:
             st.info("No recipes found matching your criteria.")
     
     def render_recipe_details(self, recipe: Recipe, user_pantry: Set[int]):
-        """Render detailed view of a specific recipe"""
-        st.header(f"📖 {recipe.name}")
+        """Render detailed view of a specific recipe in standard cookbook format"""
         
-        # Recipe metadata
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+        # 1. RECIPE TITLE (full width across top)
+        st.title(recipe.name)
+        
+        # Delete confirmation dialog (if active)
+        if st.session_state.get(f'confirm_delete_detail_{recipe.id}', False):
+            st.error(f"⚠️ Are you sure you want to delete '{recipe.name}'? This action cannot be undone.")
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button("Yes, Delete", key=f"confirm_delete_detail_yes_{recipe.id}", type="primary"):
+                    if self.db.delete_recipe(recipe.id):
+                        st.success(f"Recipe '{recipe.name}' deleted!")
+                        if 'selected_recipe_id' in st.session_state:
+                            del st.session_state['selected_recipe_id']
+                        del st.session_state[f'confirm_delete_detail_{recipe.id}']
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete recipe.")
+            with col2:
+                if st.button("Cancel", key=f"cancel_delete_detail_{recipe.id}"):
+                    del st.session_state[f'confirm_delete_detail_{recipe.id}']
+                    st.rerun()
+            st.markdown("---")
+        
+        # 2. IMAGE + INGREDIENTS (side by side - standard cookbook layout)
+        col1, col2 = st.columns([1, 2])
         
         with col1:
-            st.metric("Prep Time", f"{recipe.prep_time_minutes} min")
-        with col2:
-            st.metric("Cook Time", f"{recipe.cook_time_minutes} min")
-        with col3:
-            st.metric("Total Time", f"{recipe.get_total_time_minutes()} min")
-        with col4:
-            st.metric("Servings", recipe.servings)
-        
-        # Recipe info
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            if recipe.description:
-                st.markdown("**Description:**")
-                st.write(recipe.description)
-        
-        with col2:
-            st.markdown("**Details:**")
-            st.write(f"**Difficulty:** {recipe.difficulty_level.title()}")
-            if recipe.cuisine_type:
-                st.write(f"**Cuisine:** {recipe.cuisine_type}")
-            if recipe.meal_category:
-                st.write(f"**Category:** {recipe.meal_category.title()}")
-            if recipe.dietary_tags:
-                st.write(f"**Tags:** {', '.join(recipe.dietary_tags)}")
-        
-        # Ingredient analysis
-        recipe_ingredients = self._get_recipe_ingredients(recipe.id)
-        if recipe_ingredients:
-            st.markdown("### 🥕 Ingredients")
-            
-            # Calculate availability
-            required_ingredient_ids = {ri.ingredient_id for ri in recipe_ingredients}
-            available_ids = required_ingredient_ids & user_pantry
-            missing_ids = required_ingredient_ids - user_pantry
-            
-            # Availability status
-            if len(missing_ids) == 0:
-                st.success("✅ You have all ingredients needed!")
-            elif len(available_ids) > 0:
-                st.warning(f"⚠️ You have {len(available_ids)}/{len(required_ingredient_ids)} ingredients. Missing {len(missing_ids)} ingredients.")
+            # Recipe detail image - processed images are perfect 200x200 squares
+            if recipe.image_path and self._image_exists(recipe.image_path):
+                # Display processed 200x200 image (fits nicely in detail view)
+                st.image(recipe.image_path, width=200)
             else:
-                st.error("❌ You don't have any of the required ingredients.")
+                # Placeholder image with same size  
+                st.markdown("""
+                <div class="recipe-placeholder-image">
+                    <div class="placeholder-content">
+                        📷<br>
+                        <span class="placeholder-text">No image uploaded<br><small>Upload a photo to make this recipe more appealing!</small></span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
             
-            # Display ingredients with status
-            for recipe_ingredient in recipe_ingredients:
-                ingredient = self.ingredient_service.get_ingredient(recipe_ingredient.ingredient_id)
-                if ingredient:
-                    # Format ingredient display
-                    display_text = recipe_ingredient.get_display_text()
-                    if recipe_ingredient.preparation_note:
-                        display_text += f" {ingredient.name}, {recipe_ingredient.preparation_note}"
+            # Compact image upload - thin bar style
+            st.markdown("**Add Photo:**")
+            uploaded_file = st.file_uploader(
+                "Browse files", 
+                type=['png', 'jpg', 'jpeg', 'gif'],
+                key=f"image_upload_{recipe.id}",
+                label_visibility="collapsed"
+            )
+            
+            if uploaded_file is not None:
+                if st.button(f"Save Image", key=f"save_image_{recipe.id}", use_container_width=True):
+                    success, image_path = self._save_recipe_image(recipe.id, uploaded_file)
+                    if success:
+                        st.success("Image uploaded!")
+                        if self.db.update_recipe_image(recipe.id, image_path):
+                            st.rerun()
+                        else:
+                            st.error("Failed to save image")
                     else:
-                        display_text += f" {ingredient.name}"
-                    
-                    # Show availability status
-                    if ingredient.id in user_pantry:
-                        st.markdown(f'<div class="owned-ingredient">✅ {display_text}</div>', 
-                                  unsafe_allow_html=True)
-                    else:
-                        st.markdown(f'<div class="missing-ingredient">❌ {display_text}</div>', 
-                                  unsafe_allow_html=True)
+                        st.error("Upload failed")
         
-        # Instructions
+        with col2:
+            # 3. INGREDIENTS SECTION (traditional cookbook format - moved to right column)
+            recipe_ingredients = self._get_recipe_ingredients(recipe.id)
+            if recipe_ingredients:
+                st.markdown("## Ingredients")
+                
+                # Calculate availability for quick reference
+                required_ingredient_ids = {ri.ingredient_id for ri in recipe_ingredients}
+                available_ids = required_ingredient_ids & user_pantry
+                missing_ids = required_ingredient_ids - user_pantry
+                
+                # Quick availability indicator (compact)
+                if len(missing_ids) == 0:
+                    st.success("✅ You have all ingredients")
+                elif len(available_ids) > 0:
+                    st.warning(f"⚠️ Missing {len(missing_ids)} ingredients")
+                else:
+                    st.info("ℹ️ Check pantry for ingredients")
+                
+                # Traditional ingredients list (plain text format for reading)
+                for recipe_ingredient in recipe_ingredients:
+                    ingredient = self.ingredient_service.get_ingredient(recipe_ingredient.ingredient_id)
+                    if ingredient:
+                        # Create readable ingredient text (can include descriptive terms)
+                        # e.g., "2 tbsp butter, melted" instead of just "2 tbsp butter"
+                        display_text = recipe_ingredient.get_display_text()
+                        if recipe_ingredient.preparation_note:
+                            # Format as "quantity unit ingredient, preparation"
+                            display_text += f" {ingredient.name}, {recipe_ingredient.preparation_note}"
+                        else:
+                            display_text += f" {ingredient.name}"
+                        
+                        # Show with simple availability indicator
+                        if ingredient.id in user_pantry:
+                            st.markdown(f"✅ {display_text}")
+                        else:
+                            st.markdown(f"◯ {display_text}")
+                
+                # Expandable structured ingredient details (for system/editing purposes)
+                with st.expander("🔧 Structured Ingredient Data", expanded=False):
+                    st.markdown("**System ingredient mappings for recipe analysis:**")
+                    
+                    # Table format for structured data
+                    structured_data = []
+                    for recipe_ingredient in recipe_ingredients:
+                        ingredient = self.ingredient_service.get_ingredient(recipe_ingredient.ingredient_id)
+                        if ingredient:
+                            structured_data.append({
+                                "Order": recipe_ingredient.ingredient_order or 0,
+                                "Quantity": recipe_ingredient.quantity,
+                                "Unit": recipe_ingredient.unit,
+                                "Ingredient": ingredient.name,
+                                "Category": ingredient.category,
+                                "Preparation": recipe_ingredient.preparation_note or "-",
+                                "Optional": "Yes" if recipe_ingredient.is_optional else "No"
+                            })
+                    
+                    if structured_data:
+                        import pandas as pd
+                        df = pd.DataFrame(structured_data)
+                        df = df.sort_values("Order")
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                        
+                        st.markdown("*This structured data enables the 'What Can I Make' feature and ingredient tracking.*")
+        
+        # 4. DESCRIPTION SECTION (moved below image/ingredients)
+        if recipe.description:
+            st.markdown("## Description")
+            st.write(recipe.description)
+        
+        # 5. INSTRUCTIONS SECTION (standard cookbook format)
         if recipe.instructions:
-            st.markdown("### 📋 Instructions")
+            st.markdown("## Instructions")
             st.markdown(recipe.instructions)
         
-        # Source info
+        # 6. ADDITIONAL INFO (compact format)
         if recipe.source_url:
-            st.markdown("### 🔗 Source")
-            st.markdown(f"[Original Recipe]({recipe.source_url})")
+            st.markdown("**Source:** " + f"[Original Recipe]({recipe.source_url})")
+        
+        st.markdown("---")
+        
+        # 7. TIMING INFO (bottom, small text as requested)
+        if recipe.prep_time_minutes > 0 or recipe.cook_time_minutes > 0:
+            timing_info = []
+            if recipe.prep_time_minutes > 0:
+                timing_info.append(f"Prep: {recipe.prep_time_minutes} min")
+            if recipe.cook_time_minutes > 0:
+                timing_info.append(f"Cook: {recipe.cook_time_minutes} min")
+            if len(timing_info) > 0:
+                total_time = recipe.get_total_time_minutes()
+                timing_info.append(f"Total: {total_time} min")
+                
+                st.markdown(f"<small>⏱️ {' | '.join(timing_info)} | Serves {recipe.servings}</small>", 
+                           unsafe_allow_html=True)
+        
+        # 8. ACTION BUTTONS (bottom as requested)
+        col1, col2, col3 = st.columns([1, 1, 2])
+        
+        with col1:
+            if st.button("🏠 Back to Recipes", key=f"back_from_detail_{recipe.id}"):
+                if 'selected_recipe_id' in st.session_state:
+                    del st.session_state['selected_recipe_id']
+                st.rerun()
+        
+        with col2:
+            if st.button("✏️ Edit", key=f"edit_detail_{recipe.id}"):
+                st.info("Edit functionality coming soon")
+        
+        with col3:
+            if st.button("🗑️ Delete Recipe", key=f"delete_detail_{recipe.id}", type="secondary"):
+                st.session_state[f'confirm_delete_detail_{recipe.id}'] = True
+                st.rerun()
     
     def _render_ingredient_checkboxes(self, ingredients: List[Ingredient], container_key: str, user_id: int = 1):
         """Render ingredient checkboxes for pantry management"""
@@ -377,7 +459,7 @@ class RecipeBrowser:
                     self.pantry_service.update_pantry_item(user_id, ingredient.id, False, None)
     
     def _render_recipe_card(self, recipe: Recipe, user_pantry: Set[int]):
-        """Render a recipe card with availability status"""
+        """Render a recipe card with uniform sizing and placeholder images"""
         # Get recipe ingredients for analysis
         recipe_ingredients = self._get_recipe_ingredients(recipe.id)
         required_ingredient_ids = {ri.ingredient_id for ri in recipe_ingredients}
@@ -401,36 +483,59 @@ class RecipeBrowser:
             status_text = "❌ Need ingredients"
             status_color = "#B71C1C"
         
-        # Create recipe card
+        # Create uniform recipe card with fixed sizing
         with st.container():
-            st.markdown(f"""
-            <div style="border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; background-color: white;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h3 style="margin: 0; color: #1976D2;">{recipe.name}</h3>
-                        <p style="margin: 0.5rem 0; color: #666;">
-                            {recipe.cuisine_type} • {recipe.meal_category} • {recipe.get_total_time_minutes()} min • {recipe.servings} servings
-                        </p>
-                        <div class="{status_class}" style="color: {status_color}; font-weight: bold;">
-                            {status_text}
-                        </div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-size: 1.2em; color: #1976D2;">
-                            {available_count}/{total_ingredients} ingredients
-                        </div>
-                        <div style="color: #666;">
-                            {recipe.difficulty_level.title()} difficulty
-                        </div>
+            st.markdown('<div class="recipe-card-container">', unsafe_allow_html=True)
+            
+            # Recipe image as clickable button - no extra elements
+            has_image = recipe.image_path and self._image_exists(recipe.image_path)
+            
+            # Simple approach: One button, one image, make it work
+            if has_image:
+                # Display image first
+                st.markdown(f"""
+                <div class="recipe-image-container">
+                    <img src="data:image/jpeg;base64,{self._get_image_base64(recipe.image_path)}" alt="{recipe.name}">
+                    <div class="recipe-title-overlay">
+                        <span class="recipe-title-text">{recipe.name}</span>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+            else:
+                # Display placeholder
+                st.markdown(f"""
+                <div class="recipe-placeholder-container">
+                    <div class="placeholder-content">
+                        🍽️<br>
+                        <span class="placeholder-text">No Image</span>
+                    </div>
+                    <div class="recipe-title-overlay">
+                        <span class="recipe-title-text">{recipe.name}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
             
-            # Recipe details button
-            if st.button(f"View Recipe Details", key=f"view_recipe_{recipe.id}"):
+            # Simple generic button - recipe name is shown in overlay
+            if st.button("Recipe", key=f"recipe_click_{recipe.id}"):
                 st.session_state['selected_recipe_id'] = recipe.id
                 st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    def _render_recipe_grid(self, recipes: List[Recipe], user_pantry: Set[int]):
+        """Render recipes in a simple responsive grid layout"""
+        # Create 4 columns for very compact cards
+        recipes_per_row = 4
+        
+        # Group recipes into rows
+        for i in range(0, len(recipes), recipes_per_row):
+            row_recipes = recipes[i:i + recipes_per_row]
+            cols = st.columns(recipes_per_row)
+            
+            for j, recipe in enumerate(row_recipes):
+                with cols[j]:
+                    self._render_recipe_card(recipe, user_pantry)
+                    st.markdown("---")  # Add separator between cards
     
     def _get_all_recipes(self) -> List[Recipe]:
         """Get all recipes from database"""
@@ -469,10 +574,9 @@ class RecipeBrowser:
             logger.error(f"Error loading recipe ingredients: {e}")
             return []
     
-    def _filter_recipes(self, search_query: str, cuisine: str, category: str, 
-                       difficulty: str, time_range: str, servings_range: Tuple[int, int],
-                       dietary_filters: List[str], show_only_makeable: bool, 
-                       require_complete: bool, user_pantry: Set[int]) -> List[Recipe]:
+    def _filter_recipes(self, search_query: str, difficulty: str, time_range: str, 
+                       servings_range: Tuple[int, int], dietary_filters: List[str], 
+                       show_only_makeable: bool, require_complete: bool, user_pantry: Set[int]) -> List[Recipe]:
         """Filter recipes based on comprehensive criteria"""
         recipes = self._get_all_recipes()
         
@@ -483,21 +587,14 @@ class RecipeBrowser:
             if search_query:
                 search_lower = search_query.lower()
                 if not (search_lower in recipe.name.lower() or 
-                       search_lower in (recipe.description or "").lower() or
-                       search_lower in (recipe.cuisine_type or "").lower()):
+                       search_lower in (recipe.description or "").lower()):
                     continue
             
-            # Cuisine filter
-            if cuisine != "All" and recipe.cuisine_type != cuisine:
-                continue
+            # Category filter - disabled for simplified schema
+            # (meal_category removed)
             
-            # Category filter
-            if category != "All" and recipe.meal_category != category:
-                continue
-            
-            # Difficulty filter
-            if difficulty != "All" and recipe.difficulty_level != difficulty:
-                continue
+            # Difficulty filter - disabled for simplified schema
+            # (difficulty_level removed)
             
             # Time range filter
             total_time = recipe.get_total_time_minutes()
@@ -515,11 +612,8 @@ class RecipeBrowser:
             if not (servings_range[0] <= recipe.servings <= servings_range[1]):
                 continue
             
-            # Dietary restrictions filter
-            if dietary_filters:
-                recipe_tags = [tag.lower() for tag in recipe.dietary_tags]
-                if not all(diet_filter.lower() in recipe_tags for diet_filter in dietary_filters):
-                    continue
+            # Dietary restrictions filter - disabled for simplified schema
+            # (dietary_tags removed)
             
             # Recipe completeness filter
             if require_complete:
@@ -595,8 +689,302 @@ class RecipeBrowser:
                 padding: 1rem;
                 margin: 1rem 0;
             }
+            .recipe-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 1rem;
+                justify-content: flex-start;
+            }
+            .recipe-card-compact {
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            .recipe-card-compact:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            
+            /* Recipe card container */
+            .recipe-card-container {
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                align-items: stretch;
+            }
+            
+            /* Recipe card containers - all elements exactly 200px wide */
+            .recipe-card-container {
+                display: flex;
+                flex-direction: column;
+                width: 200px; /* Fixed width container */
+                align-items: center;
+            }
+            
+            /* Simple recipe image container */
+            .recipe-image-container {
+                width: 200px;
+                height: 200px;
+                position: relative;
+                border-radius: 8px;
+                overflow: hidden;
+                margin-bottom: 0.5rem;
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            
+            .recipe-image-container:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            
+            .recipe-image-container img {
+                width: 200px;
+                height: 200px;
+                object-fit: cover;
+                display: block;
+            }
+            
+            /* Simple recipe placeholder container */
+            .recipe-placeholder-container {
+                width: 200px;
+                height: 200px;
+                position: relative;
+                border-radius: 8px;
+                overflow: hidden;
+                margin-bottom: 0.5rem;
+                background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+                border: 2px dashed #ccc;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            
+            .recipe-placeholder-container:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            
+            /* Style the recipe buttons to match the image width */
+            .recipe-card-container .stButton {
+                width: 200px !important;
+            }
+            
+            .recipe-card-container .stButton > button {
+                width: 200px !important;
+                max-width: 200px !important;
+                background: #1f77b4 !important;
+                color: white !important;
+                border-radius: 6px !important;
+                font-size: 0.8rem !important;
+                padding: 0.5rem !important;
+                margin-top: 0.25rem !important;
+            }
+            
+            /* Text overlay at bottom of image */
+            .recipe-title-overlay {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: linear-gradient(transparent, rgba(0,0,0,0.7));
+                padding: 20px 8px 8px;
+                color: white;
+                text-align: center;
+            }
+            
+            .recipe-title-text {
+                font-size: 0.9rem;
+                font-weight: 600;
+                line-height: 1.2;
+                text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+            
+            .placeholder-content {
+                text-align: center;
+                color: #888;
+                font-size: 2rem;
+            }
+            
+            .placeholder-text {
+                font-size: 0.8rem;
+                display: block;
+                margin-top: 0.25rem;
+                color: #666;
+            }
+            
+            /* Recipe detail placeholder image */
+            .recipe-placeholder-image {
+                width: 200px;
+                height: 200px;
+                background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+                border: 2px dashed #ccc;
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 1rem;
+            }
+            
+            .recipe-placeholder-image .placeholder-content {
+                text-align: center;
+                color: #888;
+                font-size: 2rem;
+            }
+            
+            .recipe-placeholder-image .placeholder-text {
+                font-size: 0.8rem;
+                display: block;
+                margin-top: 0.25rem;
+                color: #666;
+            }
+            
+            /* Responsive adjustments - keep everything aligned */
+            @media (max-width: 768px) {
+                .recipe-card-container {
+                    width: 150px;
+                }
+                
+                .recipe-placeholder-image {
+                    width: 150px;
+                    height: 150px;
+                }
+                
+                .recipe-card-container button,
+                .recipe-card-container .stButton > button {
+                    width: 150px !important;
+                    max-width: 150px !important;
+                    height: 3rem !important;
+                    min-height: 3rem !important;
+                    font-size: 0.8rem !important;
+                }
+                
+                .placeholder-content {
+                    font-size: 1.2rem;
+                }
+                
+                .placeholder-text {
+                    font-size: 0.6rem;
+                }
+            }
+            
+            @media (max-width: 480px) {
+                .recipe-card-container {
+                    width: 120px;
+                }
+                
+                .recipe-placeholder-image {
+                    width: 120px;
+                    height: 120px;
+                }
+                
+                .recipe-card-container button,
+                .recipe-card-container .stButton > button {
+                    width: 120px !important;
+                    max-width: 120px !important;
+                    height: 3rem !important;
+                    min-height: 3rem !important;
+                    font-size: 0.7rem !important;
+                }
+                
+                .placeholder-content {
+                    font-size: 1rem;
+                }
+                
+                .placeholder-text {
+                    font-size: 0.5rem;
+                }
+            }
         </style>
         """, unsafe_allow_html=True)
+    
+    def _image_exists(self, image_path: str) -> bool:
+        """Check if image file exists"""
+        import os
+        if not image_path:
+            return False
+        
+        # Check if path is absolute or relative
+        if not os.path.isabs(image_path):
+            # If relative, check both from current directory and static directory
+            current_dir_path = os.path.join(os.getcwd(), image_path)
+            static_path = os.path.join(os.getcwd(), "static", "recipe_images", os.path.basename(image_path))
+            return os.path.exists(current_dir_path) or os.path.exists(static_path)
+        else:
+            return os.path.exists(image_path)
+    
+    def _get_image_base64(self, image_path: str) -> str:
+        """Convert image to base64 for inline HTML display"""
+        import base64
+        try:
+            with open(image_path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode()
+        except Exception as e:
+            logger.error(f"Failed to encode image to base64: {e}")
+            return ""
+    
+    def _save_recipe_image(self, recipe_id: int, uploaded_file) -> Tuple[bool, str]:
+        """Process and save uploaded image as perfect 200x200 square"""
+        import os
+        import uuid
+        from pathlib import Path
+        
+        try:
+            # Import Pillow for image processing (compatible with Streamlit)
+            from PIL import Image
+            
+            # Create static/recipe_images directory if it doesn't exist
+            images_dir = Path("static/recipe_images")
+            images_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Generate unique filename (always save as .jpg for consistency)
+            unique_filename = f"recipe_{recipe_id}_{uuid.uuid4().hex[:8]}.jpg"
+            file_path = images_dir / unique_filename
+            
+            # Process the uploaded image using Pillow (Streamlit compatible)
+            logger.info(f"Processing image for recipe {recipe_id}")
+            
+            # Open the uploaded file with Pillow
+            image = Image.open(uploaded_file)
+            
+            # Convert to RGB if necessary (handles PNG transparency, etc.)
+            if image.mode != 'RGB':
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                if image.mode == 'RGBA':
+                    background.paste(image, mask=image.split()[-1])
+                else:
+                    background.paste(image)
+                image = background
+            
+            # Create perfect square by center cropping
+            width, height = image.size
+            crop_size = min(width, height)
+            
+            # Calculate center crop coordinates
+            left = (width - crop_size) // 2
+            top = (height - crop_size) // 2
+            right = left + crop_size
+            bottom = top + crop_size
+            
+            # Crop to square and resize to exactly 200x200
+            image_square = image.crop((left, top, right, bottom))
+            image_final = image_square.resize((200, 200), Image.Resampling.LANCZOS)
+            
+            # Save as optimized JPEG (smaller file size)
+            image_final.save(file_path, 'JPEG', quality=85, optimize=True)
+            
+            # Return relative path for database storage
+            relative_path = str(file_path)
+            logger.info(f"Successfully processed and saved 200x200 image: {relative_path}")
+            return True, relative_path
+            
+        except Exception as e:
+            logger.error(f"Failed to process and save recipe image: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, ""
 
 
 def create_recipe_browser(database_service: Optional[DatabaseService] = None,
